@@ -21,31 +21,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	// Domain prefix for all labels/annotations to avoid conflicts
-	RBGDomainPrefix = "rolebasedgroup.workloads.x-k8s.io/"
-
-	// SetNameLabelKey identifies resources belonging to a specific RoleBasedGroup
-	// Value: RoleBasedGroup.metadata.name
-	SetNameLabelKey = RBGDomainPrefix + "name"
-
-	// SetRoleLabelKey identifies resources belonging to a specific role
-	// Value: RoleSpec.name from RoleBasedGroup.spec.roles[]
-	SetRoleLabelKey = RBGDomainPrefix + "role"
-
-	// SetRoleIndexLabelKey identifies pod's position in role replica set
-	// Value: Zero-padded numeric index (e.g., "001", "002")
-	SetRoleIndexLabelKey = RBGDomainPrefix + "role-index"
-
-	// RevisionAnnotationKey tracks the controller revision hash for template changes
-	// Value: SHA256 hash of RoleSpec template
-	RevisionAnnotationKey = RBGDomainPrefix + "revision"
-
-	RoleSizeAnnotationKey string = RBGDomainPrefix + "role-size"
-
-	GroupSizeAnnotationKey string = RBGDomainPrefix + "group-size"
-)
-
 // RoleBasedGroupSpec defines the desired state of RoleBasedGroup.
 type RoleBasedGroupSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -99,7 +74,7 @@ type RoleTemplate struct {
 
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
-	Spec corev1.PodSpec `json:"spec,omitempty"`
+	Spec corev1.PodTemplateSpec `json:"spec,omitempty"`
 
 	// TODO: add options or secret options if it's required.
 }
@@ -109,7 +84,7 @@ type RoleBasedGroupStatus struct {
 	// The generation observed by the controller
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	// Current service state
+	// Conditions track the condition of the RBG
 	// +patchMergeKey=type
 	// +patchStrategy=merge
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
