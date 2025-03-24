@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -28,18 +29,91 @@ type RoleBasedGroupSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of RoleBasedGroup. Edit rolebasedgroup_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:Required
+	Roles []RoleSpec `json:"roles"`
+}
+
+// RoleSpec defines the specification for a role in the group
+type RoleSpec struct {
+	// Unique identifier for the role
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// 副本数量
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=1
+	Replicas *int32 `json:"replicas"`
+
+	// Number of replicas for this role
+	// +optional
+	Dependencies []string `json:"dependencies,omitempty"`
+
+	// Workload type specification
+	// +kubebuilder:default={apiVersion:"apps/v1", kind:"StatefulSet"}
+	// +optional
+	Workload WorkloadSpec `json:"workload,omitempty"`
+
+	// Pod template specification
+	Template PodTemplate `json:"template"`
+}
+
+type WorkloadSpec struct {
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/v[0-9]+((alpha|beta)[0-9]+)?$`
+	// +kubebuilder:default="apps/v1"
+	APIVersion string `json:"apiVersion"`
+
+	// +kubebuilder:validation:Required
+	// +kubebuilder:default="StatefulSet"
+	Kind string `json:"kind"`
+}
+
+type PodTemplate struct {
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	Metadata metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	Spec corev1.PodSpec `json:"spec,omitempty"`
 }
 
 // RoleBasedGroupStatus defines the observed state of RoleBasedGroup.
 type RoleBasedGroupStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// The generation observed by the controller
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// Current service state
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+
+	// Status of individual roles
+	RoleStatuses []RoleStatus `json:"roleStatuses,omitempty"`
+}
+
+// RoleStatus shows the current state of a specific role
+type RoleStatus struct {
+	// Name of the role
+	Name string `json:"name"`
+
+	// Reference to the workload resource
+	WorkloadRef *corev1.ObjectReference `json:"workloadRef,omitempty"`
+
+	// Number of ready replicas
+	ReadyReplicas int32 `json:"readyReplicas"`
+
+	// Total number of desired replicas
+	Replicas int32 `json:"replicas"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // RoleBasedGroup is the Schema for the rolebasedgroups API.
 type RoleBasedGroup struct {
