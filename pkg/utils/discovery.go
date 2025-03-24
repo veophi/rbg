@@ -16,7 +16,7 @@ func injectDiscoveryConfigToEnv(role *workloadsv1.RoleSpec) (envVars []corev1.En
 			Name: "ROLE_INDEX",
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath: "metadata.annotations['rolebasedgroup.x-k8s.io/role-index']",
+					FieldPath: "metadata.annotations['apps.kubernetes.io/pod-index']",
 				},
 			},
 		},
