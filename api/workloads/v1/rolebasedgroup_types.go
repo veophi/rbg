@@ -21,8 +21,30 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+const (
+	// Domain prefix for all labels/annotations to avoid conflicts
+	DomainPrefix = "rolebasedgroup.workloads.x-k8s.io/"
+
+	// SetNameLabelKey identifies resources belonging to a specific RoleBasedGroup
+	// Value: RoleBasedGroup.metadata.name
+	SetNameLabelKey = DomainPrefix + "name"
+
+	// SetRoleLabelKey identifies resources belonging to a specific role
+	// Value: RoleSpec.name from RoleBasedGroup.spec.roles[]
+	SetRoleLabelKey = DomainPrefix + "role"
+
+	// SetRoleIndexLabelKey identifies pod's position in role replica set
+	// Value: Zero-padded numeric index (e.g., "001", "002")
+	SetRoleIndexLabelKey = DomainPrefix + "role-index"
+
+	// RevisionAnnotationKey tracks the controller revision hash for template changes
+	// Value: SHA256 hash of RoleSpec template
+	RevisionAnnotationKey = DomainPrefix + "revision"
+
+	RoleSizeAnnotationKey string = DomainPrefix + "role-size"
+
+	GroupSizeAnnotationKey string = DomainPrefix + "group-size"
+)
 
 // RoleBasedGroupSpec defines the desired state of RoleBasedGroup.
 type RoleBasedGroupSpec struct {
@@ -56,7 +78,7 @@ type RoleSpec struct {
 	Workload WorkloadSpec `json:"workload,omitempty"`
 
 	// Pod template specification
-	Template PodTemplate `json:"template"`
+	Template RoleTemplate `json:"template"`
 }
 
 type WorkloadSpec struct {
@@ -70,7 +92,7 @@ type WorkloadSpec struct {
 	Kind string `json:"kind"`
 }
 
-type PodTemplate struct {
+type RoleTemplate struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
 	Metadata metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -78,6 +100,8 @@ type PodTemplate struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
 	Spec corev1.PodSpec `json:"spec,omitempty"`
+
+	// TODO: add options or secret options if it's required.
 }
 
 // RoleBasedGroupStatus defines the observed state of RoleBasedGroup.
@@ -111,9 +135,9 @@ type RoleStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:resource:shortName={rbg}
 
 // RoleBasedGroup is the Schema for the rolebasedgroups API.
 type RoleBasedGroup struct {
