@@ -8,7 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func CreateOrUpdate(k8sClient client.Client, ctx context.Context, obj client.Object) error {
+func CreateOrUpdate(ctx context.Context, k8sClient client.Client, obj client.Object) error {
 	existing := obj.DeepCopyObject().(client.Object)
 	err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), existing)
 	if err != nil && errors.IsNotFound(err) {

@@ -1,6 +1,6 @@
 package v1
 
-func (rbg *RoleBasedGroup) GetCommonLabelsFromRole(role RoleSpec) map[string]string {
+func (rbg *RoleBasedGroup) GetCommonLabelsFromRole(role *RoleSpec) map[string]string {
 	return map[string]string{
 		"app.kubernetes.io/name":       rbg.Name,
 		"app.kubernetes.io/component":  role.Name,
@@ -9,6 +9,6 @@ func (rbg *RoleBasedGroup) GetCommonLabelsFromRole(role RoleSpec) map[string]str
 	}
 }
 
-func (rbg *RoleBasedGroup) GetCommonAnnotationsFromRole(role RoleSpec) map[string]string {
+func (rbg *RoleBasedGroup) GetCommonAnnotationsFromRole(role *RoleSpec) map[string]string {
 	return map[string]string{}
 }

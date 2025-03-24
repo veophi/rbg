@@ -5,7 +5,7 @@ import (
 	workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
 )
 
-func injectDiscoveryConfigToEnv(role workloadsv1.RoleSpec) (envVars []corev1.EnvVar) {
+func injectDiscoveryConfigToEnv(role *workloadsv1.RoleSpec) (envVars []corev1.EnvVar) {
 	// Inject environment variables for service discovery
 	envVars = []corev1.EnvVar{
 		{

@@ -14,7 +14,7 @@ import (
 	workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
 )
 
-func CreateHeadlessServiceIfNotExists(ctx context.Context, rbg *workloadsv1.RoleBasedGroup, role workloadsv1.RoleSpec, k8sClient client.Client, Scheme *runtime.Scheme, log logr.Logger) (err error) {
+func CreateHeadlessServiceIfNotExists(ctx context.Context, k8sClient client.Client, Scheme *runtime.Scheme, rbg *workloadsv1.RoleBasedGroup, role *workloadsv1.RoleSpec, log logr.Logger) (err error) {
 	// Generate Service name (same as StatefulSet)
 	svcName := fmt.Sprintf("%s-%s", rbg.Name, role.Name)
 
