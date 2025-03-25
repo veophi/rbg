@@ -6,5 +6,6 @@ import (
 
 type DependencyManager interface {
 	SortRoles(rbg *workloadsv1.RoleBasedGroup) ([]*workloadsv1.RoleSpec, error)
-	CheckDependencies(roles []*workloadsv1.RoleSpec) (bool, error)
+	// avoid dead circle
+	CheckDependencies(rbg *workloadsv1.RoleBasedGroup, role *workloadsv1.RoleSpec) (ready bool, err error)
 }

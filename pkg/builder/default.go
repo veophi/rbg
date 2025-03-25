@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -16,12 +17,14 @@ import (
 type defaultBuilder struct {
 	client client.Client
 	scheme *runtime.Scheme
+	log    logr.Logger
 }
 
-func NewDefaultBuilder(client client.Client, scheme *runtime.Scheme) *defaultBuilder {
+func NewDefaultBuilder(client client.Client, scheme *runtime.Scheme, log logr.Logger) *defaultBuilder {
 	return &defaultBuilder{
 		client: client,
 		scheme: scheme,
+		log:    log,
 	}
 }
 

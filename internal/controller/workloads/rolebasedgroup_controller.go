@@ -30,6 +30,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
+	"sigs.k8s.io/rbgs/pkg/builder"
+	"sigs.k8s.io/rbgs/pkg/dependency"
 	"sigs.k8s.io/rbgs/pkg/utils"
 )
 
@@ -49,7 +51,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, rbg); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	logger := log.FromContext(ctx).WithValues("leaderworkerset", klog.KObj(rbg))
+	logger := log.FromContext(ctx).WithValues("rolebasedgroup", klog.KObj(rbg))
 	logger.Info("Starting reconciliation")
 
 	// Initialize status if needed
@@ -58,16 +60,21 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Process roles in dependency order
-	sortedRoles, err := utils.SortRolesByDependencies(rbg)
+
+	dependencyManager := dependency.BuildSorter(logger)
+
+	sortedRoles, err := dependencyManager.SortRoles(rbg)
 	if err != nil {
 		r.Recorder.Event(rbg, corev1.EventTypeWarning, "InvalidDependency", err.Error())
 		return ctrl.Result{}, err
 	}
 
+	builder := builder.NewDefaultBuilder(r.Client, r.Scheme, logger)
+
 	// Reconcile each role
 	for _, role := range sortedRoles {
 		// Check dependencies first
-		if ready, err := utils.CheckDependencies(rbg, role); !ready || err != nil {
+		if ready, err := dependencyManager.CheckDependencies(rbg, role); !ready || err != nil {
 			if err != nil {
 				return ctrl.Result{}, err
 			}
@@ -75,14 +82,17 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{RequeueAfter: 5}, nil
 		}
 
-		// Reconcile StatefulSet
-		if err := utils.ReconcileStatefulSet(ctx, r.Client, rbg, role, r.Scheme); err != nil {
+		builder.ReconcileWorkloadByRole(ctx, rbg, role)
+
+		// Reconcile workload
+		if err := builder.ReconcileWorkloadByRole(ctx, rbg, role); err != nil {
 			r.Recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
-				"Failed to reconcile StatefulSet for role %s: %v", role.Name, err)
+				"Failed to reconcile workload for role %s with type %v: %v", role.Name, role.Workload, err)
 			return ctrl.Result{}, err
 		}
 
 		// Reconcile Service
+
 		err := utils.CreateHeadlessServiceIfNotExists(ctx, r.Client, r.Scheme, rbg, role, logger)
 		if err != nil {
 			r.Recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
@@ -92,6 +102,25 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *RoleBasedGroupReconciler) reconcileStatefulSet(
+	ctx context.Context,
+	cr *workloadsv1.RoleBasedGroup,
+	role workloadsv1.RoleSpec,
+) error {
+	// 1. 初始化 Builder 和 Injector
+	builder := &builder.StatefulSetBuilder{Scheme: r.Scheme}
+	injector := discovery.NewDefaultInjector(r.Client)
+
+	// 2. 构建 StatefulSet
+	sts, err := builder.BuildStatefulSet(cr, role, injector)
+	if err != nil {
+		return err
+	}
+
+	// 3. 应用 StatefulSet
+	return r.createOrUpdate(ctx, sts)
 }
 
 // SetupWithManager sets up the controller with the Manager.

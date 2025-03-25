@@ -55,7 +55,7 @@ type RoleSpec struct {
 	// Pod template specification
 	Template RoleTemplate `json:"template"`
 
-	// +kubebuilder:validation:Schemaless
+	// +optional
 	ServicePorts []corev1.ServicePort `json:"servicePorts,omitempty"`
 }
 

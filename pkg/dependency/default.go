@@ -1,10 +1,15 @@
 package dependency
 
-import workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
+import (
+	"github.com/go-logr/logr"
+	workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
+)
 
-type defaultSorter struct{}
+type defaultDepencyHandler struct {
+	log logr.Logger
+}
 
-func (sorter *defaultSorter) SortRolesByDependencies(rbg *workloadsv1.RoleBasedGroup) (roles []*workloadsv1.RoleSpec, err error) {
+func (sorter *defaultDepencyHandler) SortRoles(rbg *workloadsv1.RoleBasedGroup) (roles []*workloadsv1.RoleSpec, err error) {
 	// Implementation of topological sort based on dependencies
 	// ... (omitted for brevity)
 	// return rbg.Spec.Roles, nil
@@ -16,8 +21,12 @@ func (sorter *defaultSorter) SortRolesByDependencies(rbg *workloadsv1.RoleBasedG
 
 }
 
-func (sorter *defaultSorter) CheckDependencies(rbg *workloadsv1.RoleBasedGroup, role *workloadsv1.RoleSpec) (ready bool, err error) {
+func (sorter *defaultDepencyHandler) CheckDependencies(rbg *workloadsv1.RoleBasedGroup, role *workloadsv1.RoleSpec) (ready bool, err error) {
 	// Check if all dependencies are ready
 	// ... (omitted for brevity)
 	return
+}
+
+func BuildSorter(log logr.Logger) DependencyManager {
+	return &defaultDepencyHandler{log: log}
 }

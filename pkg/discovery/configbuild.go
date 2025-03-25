@@ -13,6 +13,8 @@ import (
 type ConfigBuilder struct {
 	RBG       *workloadsv1.RoleBasedGroup
 	GroupName string
+	RoleName  string
+	RoleIndex int32
 }
 
 type ClusterConfig struct {
@@ -35,7 +37,7 @@ type RoleInstances struct {
 
 type Instance struct {
 	Address string           `json:"address"`
-	Ports   map[string]int32 `json:"ports"` // Key: port name, Value: port number
+	Ports   map[string]int32 `json:"ports,omitempty"` // Key: port name, Value: port number
 }
 
 func (b *ConfigBuilder) Build() ([]byte, error) {
@@ -79,7 +81,6 @@ func (b *ConfigBuilder) buildInstances(role workloadsv1.RoleSpec) []Instance {
 			Ports:   make(map[string]int32),
 		}
 
-		// 收集所有端口
 		for _, port := range role.ServicePorts {
 			portName := generatePortKey(port)
 			instance.Ports[portName] = port.Port
