@@ -6,7 +6,9 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
 	"sigs.k8s.io/rbgs/pkg/utils"
 )
@@ -17,8 +19,17 @@ type ConfigInjector interface {
 }
 
 type DefaultInjector struct {
-	Client client.Client
+	client client.Client
 	ctx    context.Context
+	scheme *runtime.Scheme
+}
+
+func NewDefaultInjector(client client.Client, ctx context.Context, scheme *runtime.Scheme) *DefaultInjector {
+	return &DefaultInjector{
+		client: client,
+		ctx:    ctx,
+		scheme: scheme,
+	}
 }
 
 func (i *DefaultInjector) InjectConfig(pod *corev1.Pod, rbg *workloadsv1.RoleBasedGroup, roleName string, index int32) error {
@@ -44,6 +55,11 @@ func (i *DefaultInjector) InjectConfig(pod *corev1.Pod, rbg *workloadsv1.RoleBas
 		Data: map[string]string{
 			"config.yaml": string(configData),
 		},
+	}
+
+	// 设置 OwnerReference
+	if err := controllerutil.SetControllerReference(rbg, configMap, i.scheme); err != nil {
+		return err
 	}
 
 	pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
@@ -73,12 +89,12 @@ func (i *DefaultInjector) InjectConfig(pod *corev1.Pod, rbg *workloadsv1.RoleBas
 
 	// Create/Update ConfigMap logic
 	// return reconcileConfigMap(i.Client, rbg, configData)
-	return utils.CreateOrUpdate(i.ctx, i.Client, configMap)
+	return utils.CreateOrUpdate(i.ctx, i.client, configMap)
 }
 
-func (i *DefaultInjector) InjectEnvVars(pod *corev1.Pod, rbg client.Object, roleName string, index int32) error {
+func (i *DefaultInjector) InjectEnvVars(pod *corev1.Pod, rbg *workloadsv1.RoleBasedGroup, roleName string, index int32) error {
 	generator := &EnvGenerator{
-		RBG:       rbg.(*workloadsv1.RoleBasedGroup),
+		RBG:       rbg,
 		RoleName:  roleName,
 		RoleIndex: index,
 	}

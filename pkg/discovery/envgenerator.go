@@ -20,6 +20,7 @@ func (g *EnvGenerator) Generate() []corev1.EnvVar {
 	// 	g.buildRoleAddressVars()
 	// }
 	base := []corev1.EnvVar{g.buildRoleSizeVar()}
+	base = append(base, g.buildLocalRoleVars()...)
 	return append(base, g.buildRoleAddressVars()...)
 }
 
@@ -68,4 +69,25 @@ func (g *EnvGenerator) buildRoleAddressVars() []corev1.EnvVar {
 		}
 	}
 	return envVars
+}
+
+func (g *EnvGenerator) buildLocalRoleVars() (envVars []corev1.EnvVar) {
+	// Inject environment variables for service discovery
+	envVars = []corev1.EnvVar{
+		{
+			Name:  "ROLE_NAME",
+			Value: g.RoleName,
+		},
+		// for statefulset
+		{
+			Name: "ROLE_INDEX",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "metadata.annotations['apps.kubernetes.io/pod-index']",
+				},
+			},
+		},
+	}
+
+	return
 }

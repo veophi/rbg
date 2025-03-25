@@ -26,7 +26,7 @@ func ConstructStatefulsetByRole(rbg *workloadsv1.RoleBasedGroup, role *workloads
 		},
 		Spec: appsv1.StatefulSetSpec{
 			Replicas: role.Replicas,
-			Template: role.Template.Spec,
+			Template: role.Template,
 		},
 	}
 

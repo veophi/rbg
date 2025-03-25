@@ -53,7 +53,7 @@ type RoleSpec struct {
 	Workload WorkloadSpec `json:"workload,omitempty"`
 
 	// Pod template specification
-	Template RoleTemplate `json:"template"`
+	Template corev1.PodTemplateSpec `json:"spec,omitempty"`
 
 	// +optional
 	ServicePorts []corev1.ServicePort `json:"servicePorts,omitempty"`
@@ -70,17 +70,17 @@ type WorkloadSpec struct {
 	Kind string `json:"kind"`
 }
 
-type RoleTemplate struct {
-	// +kubebuilder:pruning:PreserveUnknownFields
-	// +kubebuilder:validation:Schemaless
-	Metadata metav1.ObjectMeta `json:"metadata,omitempty"`
+// type RoleTemplate struct {
+// 	// +kubebuilder:pruning:PreserveUnknownFields
+// 	// +kubebuilder:validation:Schemaless
+// 	Metadata metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// +kubebuilder:pruning:PreserveUnknownFields
-	// +kubebuilder:validation:Schemaless
-	Spec corev1.PodTemplateSpec `json:"spec,omitempty"`
+// 	// +kubebuilder:pruning:PreserveUnknownFields
+// 	// +kubebuilder:validation:Schemaless
+// 	Spec corev1.PodTemplateSpec `json:"spec,omitempty"`
 
-	// TODO: add options or secret options if it's required.
-}
+// 	// TODO: add options or secret options if it's required.
+// }
 
 // RoleBasedGroupStatus defines the observed state of RoleBasedGroup.
 type RoleBasedGroupStatus struct {
