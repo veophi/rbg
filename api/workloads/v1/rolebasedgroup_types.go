@@ -26,6 +26,7 @@ type RoleBasedGroupSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:Required
 	Roles []RoleSpec `json:"roles"`
@@ -38,7 +39,6 @@ type RoleSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
-	// 副本数量
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=1
 	Replicas *int32 `json:"replicas"`
@@ -60,27 +60,15 @@ type RoleSpec struct {
 }
 
 type WorkloadSpec struct {
-	// +kubebuilder:validation:Required
+	// +optional
 	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/v[0-9]+((alpha|beta)[0-9]+)?$`
 	// +kubebuilder:default="apps/v1"
 	APIVersion string `json:"apiVersion"`
 
-	// +kubebuilder:validation:Required
+	// +optional
 	// +kubebuilder:default="StatefulSet"
 	Kind string `json:"kind"`
 }
-
-// type RoleTemplate struct {
-// 	// +kubebuilder:pruning:PreserveUnknownFields
-// 	// +kubebuilder:validation:Schemaless
-// 	Metadata metav1.ObjectMeta `json:"metadata,omitempty"`
-
-// 	// +kubebuilder:pruning:PreserveUnknownFields
-// 	// +kubebuilder:validation:Schemaless
-// 	Spec corev1.PodTemplateSpec `json:"spec,omitempty"`
-
-// 	// TODO: add options or secret options if it's required.
-// }
 
 // RoleBasedGroupStatus defines the observed state of RoleBasedGroup.
 type RoleBasedGroupStatus struct {
@@ -93,16 +81,13 @@ type RoleBasedGroupStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 
 	// Status of individual roles
-	RoleStatuses []RoleStatus `json:"roleStatuses,omitempty"`
+	RoleStatuses []RoleStatus `json:"roleStatuses"`
 }
 
 // RoleStatus shows the current state of a specific role
 type RoleStatus struct {
 	// Name of the role
 	Name string `json:"name"`
-
-	// Reference to the workload resource
-	WorkloadRef *corev1.ObjectReference `json:"workloadRef,omitempty"`
 
 	// Number of ready replicas
 	ReadyReplicas int32 `json:"readyReplicas"`
