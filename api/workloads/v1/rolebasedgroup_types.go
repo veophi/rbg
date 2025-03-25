@@ -126,6 +126,27 @@ type RoleBasedGroup struct {
 	Status RoleBasedGroupStatus `json:"status,omitempty"`
 }
 
+type RoleBasedGroupConditionType string
+
+// These are built-in conditions of a RBG.
+const (
+	// RoleBasedGroupAvailable means the rbg is available, ie, at least the
+	// minimum available groups are up and running.
+	RoleBasedGroupAvailable RoleBasedGroupConditionType = "Available"
+
+	// RoleBasedGroupProgressing means rbg is progressing. Progress for a
+	// rbg replica is considered when a new group is created, and when new pods
+	// scale up and down. Before a group has all its pods ready, the group itself
+	// will be in progressing state. And any group in progress will make
+	// the rbg as progressing state.
+	RoleBasedGroupProgressing RoleBasedGroupConditionType = "Progressing"
+
+	// RoleBasedGroupUpdateInProgress means rbg is performing a rolling update. UpdateInProgress
+	// is true when the rbg is in upgrade process after the (leader/worker) template is updated. If only replicas is modified, it will
+	// not be considered as UpdateInProgress.
+	RoleBasedGroupUpdateInProgress RoleBasedGroupConditionType = "UpdateInProgress"
+)
+
 // +kubebuilder:object:root=true
 
 // RoleBasedGroupList contains a list of RoleBasedGroup.

@@ -5,11 +5,11 @@ import (
 	workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
 )
 
-type defaultDepencyHandler struct {
+type defaultDepencyManager struct {
 	log logr.Logger
 }
 
-func (sorter *defaultDepencyHandler) SortRoles(rbg *workloadsv1.RoleBasedGroup) (roles []*workloadsv1.RoleSpec, err error) {
+func (sorter *defaultDepencyManager) SortRoles(rbg *workloadsv1.RoleBasedGroup) (roles []*workloadsv1.RoleSpec, err error) {
 	// Implementation of topological sort based on dependencies
 	// ... (omitted for brevity)
 	// return rbg.Spec.Roles, nil
@@ -21,12 +21,12 @@ func (sorter *defaultDepencyHandler) SortRoles(rbg *workloadsv1.RoleBasedGroup) 
 
 }
 
-func (sorter *defaultDepencyHandler) CheckDependencies(rbg *workloadsv1.RoleBasedGroup, role *workloadsv1.RoleSpec) (ready bool, err error) {
+func (sorter *defaultDepencyManager) CheckDependencies(rbg *workloadsv1.RoleBasedGroup, role *workloadsv1.RoleSpec) (ready bool, err error) {
 	// Check if all dependencies are ready
 	// ... (omitted for brevity)
 	return
 }
 
-func BuildSorter(log logr.Logger) DependencyManager {
-	return &defaultDepencyHandler{log: log}
+func NewtDepencyManager(log logr.Logger) DependencyManager {
+	return &defaultDepencyManager{log: log}
 }

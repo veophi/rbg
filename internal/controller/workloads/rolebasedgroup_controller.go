@@ -18,9 +18,13 @@ package workloads
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -34,6 +38,15 @@ import (
 	"sigs.k8s.io/rbgs/pkg/dependency"
 	"sigs.k8s.io/rbgs/pkg/discovery"
 	"sigs.k8s.io/rbgs/pkg/utils"
+)
+
+const (
+	// FailedCreate Event reason used when a resource creation fails.
+	// The event uses the error(s) as the reason.
+	FailedCreate     = "FailedCreate"
+	RolesProgressing = "RolesProgressing"
+	RolesUpdating    = "RolesUpdating"
+	CreatingRevision = "CreatingRevision"
 )
 
 // RoleBasedGroupReconciler reconciles a RoleBasedGroup object
@@ -62,7 +75,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Process roles in dependency order
 
-	dependencyManager := dependency.NewManager(logger)
+	dependencyManager := dependency.NewtDepencyManager(logger)
 	sortedRoles, err := dependencyManager.SortRoles(rbg)
 	if err != nil {
 		r.Recorder.Event(rbg, corev1.EventTypeWarning, "InvalidDependency", err.Error())
@@ -93,6 +106,12 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				"Failed to create Service for role %s: %v", role.Name, err)
 			return ctrl.Result{}, err
 		}
+	}
+
+	if err = r.updateStatus(ctx, rbg); err != nil {
+		r.Recorder.Eventf(rbg, corev1.EventTypeWarning, "UpdateStatusFailed",
+			"Failed to update status for %s: %v", rbg.Name, err)
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
@@ -134,6 +153,87 @@ func (r *RoleBasedGroupReconciler) reconcileService(
 
 	// 3. Apply StatefulSet
 	return utils.CreateOrUpdate(ctx, r.Client, svc)
+}
+
+func (r *RoleBasedGroupReconciler) updateStatus(
+	ctx context.Context,
+	rbg *workloadsv1.RoleBasedGroup,
+) error {
+	// updateStatus := false
+	log := ctrl.LoggerFrom(ctx)
+	oldRbg := &workloadsv1.RoleBasedGroup{}
+	if err := r.Client.Get(ctx, types.NamespacedName{
+		Name:      rbg.Name,
+		Namespace: rbg.Namespace,
+	}, oldRbg); err != nil {
+		return fmt.Errorf("failed to get fresh RBG: %w", err)
+	}
+	oldStatus := oldRbg.Status.DeepCopy()
+	newRbg := oldRbg.DeepCopy()
+
+	// 遍历所有角色, 构建索引
+	updateStatus := false
+
+	for _, role := range rbg.Spec.Roles {
+		// 生成 StatefulSet 名称
+		stsName := fmt.Sprintf("%s-%s", rbg.Name, role.Name)
+		// 获取关联的 StatefulSet
+		sts := &appsv1.StatefulSet{}
+		err := r.Client.Get(ctx, types.NamespacedName{
+			Name:      stsName,
+			Namespace: rbg.Namespace,
+		}, sts)
+
+		if err != nil {
+			return err
+		}
+		updateStatus = utils.UpdateRoleReplicas(newRbg, role.Name, sts)
+	}
+
+	if updateStatus {
+		if reflect.DeepEqual(oldStatus, newRbg.Status) {
+			log.Info("No need to update for old status %v and new status %v, because it's deepequal", oldStatus, newRbg.Status)
+			return nil
+		}
+
+		if err := r.Status().Update(ctx, newRbg); err != nil {
+			if !apierrors.IsConflict(err) {
+				log.Error(err, "Updating LeaderWorkerSet status and/or condition.")
+			}
+			return err
+		}
+	} else {
+		log.Info("No need to update for old status %v and new status %v, because updateStatus is false", oldStatus, newRbg.Status)
+	}
+
+	return nil
+}
+
+func makeCondition(conditionType workloadsv1.RoleBasedGroupConditionType) metav1.Condition {
+	var condtype, reason, message string
+	switch conditionType {
+	case workloadsv1.RoleBasedGroupAvailable:
+		condtype = string(workloadsv1.RoleBasedGroupAvailable)
+		reason = "AllRolesReady"
+		message = "All replicas are ready"
+	case workloadsv1.RoleBasedGroupUpdateInProgress:
+		condtype = string(workloadsv1.RoleBasedGroupUpdateInProgress)
+		reason = RolesUpdating
+		message = "Rolling Upgrade is in progress"
+	default:
+		condtype = string(workloadsv1.RoleBasedGroupProgressing)
+		reason = RolesProgressing
+		message = "Replicas are progressing"
+	}
+
+	condition := metav1.Condition{
+		Type:               condtype,
+		Status:             metav1.ConditionStatus(corev1.ConditionTrue),
+		LastTransitionTime: metav1.Now(),
+		Reason:             reason,
+		Message:            message,
+	}
+	return condition
 }
 
 // SetupWithManager sets up the controller with the Manager.

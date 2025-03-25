@@ -19,9 +19,11 @@ func (g *EnvGenerator) Generate() []corev1.EnvVar {
 	// 	g.buildRoleSizeVar(),
 	// 	g.buildRoleAddressVars()
 	// }
-	base := []corev1.EnvVar{g.buildRoleSizeVar()}
-	base = append(base, g.buildLocalRoleVars()...)
-	return append(base, g.buildRoleAddressVars()...)
+	envVars := make([]corev1.EnvVar, 0)
+	envVars = append(envVars, g.buildRoleSizeVar())
+	envVars = append(envVars, g.buildLocalRoleVars()...)
+	envVars = append(envVars, g.buildRoleAddressVars()...)
+	return envVars
 }
 
 func (g *EnvGenerator) buildRoleSizeVar() corev1.EnvVar {
