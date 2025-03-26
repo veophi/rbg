@@ -45,7 +45,7 @@ func (i *DefaultInjector) InjectConfig(pod *corev1.Pod, rbg *workloadsv1.RoleBas
 		return err
 	}
 
-	cmName := fmt.Sprintf("rbgs-%s-%s-cm", rbg.GetName(), roleName)
+	cmName := fmt.Sprintf("%s-%s-rbg-cm", rbg.GetName(), roleName)
 
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -80,8 +80,8 @@ func (i *DefaultInjector) InjectConfig(pod *corev1.Pod, rbg *workloadsv1.RoleBas
 		pod.Spec.Containers[i].VolumeMounts = append(
 			pod.Spec.Containers[i].VolumeMounts,
 			corev1.VolumeMount{
-				Name:      "rbgs-group-config",
-				MountPath: "/etc/rbgs",
+				Name:      "group-config-rbg",
+				MountPath: "/etc/rbg",
 				ReadOnly:  true,
 			},
 		)

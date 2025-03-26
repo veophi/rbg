@@ -4,14 +4,14 @@ import (
 	"context"
 	"reflect"
 
-	"k8s.io/cri-api/pkg/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func CreateOrUpdate(ctx context.Context, k8sClient client.Client, obj client.Object) error {
 	existing := obj.DeepCopyObject().(client.Object)
 	err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), existing)
-	if err != nil && errors.IsNotFound(err) {
+	if err != nil && apierrors.IsNotFound(err) {
 		return k8sClient.Create(ctx, obj)
 	} else if err != nil {
 		return err
@@ -21,4 +21,15 @@ func CreateOrUpdate(ctx context.Context, k8sClient client.Client, obj client.Obj
 		return k8sClient.Update(ctx, obj)
 	}
 	return nil
+}
+
+func MergeMap(target map[string]string, sources ...map[string]string) {
+	if target == nil {
+		return
+	}
+	for _, src := range sources {
+		for k, v := range src {
+			target[k] = v
+		}
+	}
 }

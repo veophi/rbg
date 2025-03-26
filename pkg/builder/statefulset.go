@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
 	"sigs.k8s.io/rbgs/pkg/discovery"
+	"sigs.k8s.io/rbgs/pkg/utils"
 )
 
 type StatefulSetBuilder struct {
@@ -39,14 +40,18 @@ func (b *StatefulSetBuilder) Build(ctx context.Context,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: rbg.GetCommonLabelsFromRole(role),
 			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: rbg.GetCommonLabelsFromRole(role),
-				},
-				Spec: *role.Template.Spec.DeepCopy(),
-			},
+			// Template: corev1.PodTemplateSpec{
+			// 	ObjectMeta: metav1.ObjectMeta{
+			// 		Labels: rbg.GetCommonLabelsFromRole(role),
+			// 	},
+			// 	Spec: &role.Template.Spec.DeepCopy(),
+			// },
+			Template: *role.Template.DeepCopy(),
 		},
 	}
+
+	utils.MergeMap(sts.Spec.Template.ObjectMeta.Labels, rbg.GetCommonLabelsFromRole(role))
+	utils.MergeMap(sts.Spec.Template.ObjectMeta.Annotations, rbg.GetCommonAnnotationsFromRole(role))
 
 	// 2. 注入配置
 	dummyPod := &corev1.Pod{
