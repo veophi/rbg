@@ -24,7 +24,7 @@ func (sorter *defaultDepencyManager) SortRoles(rbg *workloadsv1.RoleBasedGroup) 
 func (sorter *defaultDepencyManager) CheckDependencies(rbg *workloadsv1.RoleBasedGroup, role *workloadsv1.RoleSpec) (ready bool, err error) {
 	// Check if all dependencies are ready
 	// ... (omitted for brevity)
-	return
+	return true, nil
 }
 
 func NewtDepencyManager(log logr.Logger) DependencyManager {
