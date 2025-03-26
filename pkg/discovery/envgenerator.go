@@ -15,14 +15,22 @@ type EnvGenerator struct {
 }
 
 func (g *EnvGenerator) Generate() []corev1.EnvVar {
-	// return []corev1.EnvVar{
-	// 	g.buildRoleSizeVar(),
-	// 	g.buildRoleAddressVars()
-	// }
-	envVars := make([]corev1.EnvVar, 0)
-	envVars = append(envVars, g.buildRoleSizeVar())
-	envVars = append(envVars, g.buildLocalRoleVars()...)
-	envVars = append(envVars, g.buildRoleAddressVars()...)
+	envMap := make(map[string]corev1.EnvVar)
+
+	for _, env := range g.buildLocalRoleVars() {
+		envMap[env.Name] = env
+	}
+	if sizeVar := g.buildRoleSizeVar(); sizeVar.Name != "" {
+		envMap[sizeVar.Name] = sizeVar
+	}
+	for _, env := range g.buildRoleAddressVars() {
+		envMap[env.Name] = env
+	}
+
+	envVars := make([]corev1.EnvVar, 0, len(envMap))
+	for _, env := range envMap {
+		envVars = append(envVars, env)
+	}
 	return envVars
 }
 
@@ -56,14 +64,11 @@ func (g *EnvGenerator) buildRoleAddressVars() []corev1.EnvVar {
 			// ROLES_PREFILL_0_HTTP_PORT=8080
 			// ROLES_PREFILL_0_METRICS_PORT=9090
 
-			// # 匿名端口处理（port 未命名）
-			// ROLES_DECODE_0_PORT50051=50051
-			// ROLES_DECODE_0_PORT8080=8080
 			for _, port := range role.ServicePorts {
 				portKey := generatePortKey(port)
 				envVars = append(envVars,
 					corev1.EnvVar{
-						Name:  fmt.Sprintf("%s_%s_PORT", basePrefix, portKey),
+						Name:  fmt.Sprintf("%s_%s_PORT", basePrefix, strings.ToUpper(portKey)),
 						Value: fmt.Sprintf("%d", port.Port),
 					},
 				)

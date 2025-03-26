@@ -131,11 +131,24 @@ func (i *DefaultInjector) InjectEnvVars(pod *corev1.Pod, rbg *workloadsv1.RoleBa
 	}
 
 	envVars := generator.Generate()
-	for i := range pod.Spec.Containers {
-		pod.Spec.Containers[i].Env = append(
-			pod.Spec.Containers[i].Env,
-			envVars...,
-		)
+
+	for idx := range pod.Spec.Containers {
+		container := &pod.Spec.Containers[idx]
+		// 1. 将现有环境变量转为 Map 去重
+		existingEnv := make(map[string]corev1.EnvVar)
+		for _, e := range container.Env {
+			existingEnv[e.Name] = e
+		}
+		// 2. 合并新环境变量（同名覆盖）
+		for _, newEnv := range envVars {
+			existingEnv[newEnv.Name] = newEnv // 新变量覆盖旧值
+		}
+		// 3. 将 Map 转换回 Slice
+		mergedEnv := make([]corev1.EnvVar, 0, len(existingEnv))
+		for _, env := range existingEnv {
+			mergedEnv = append(mergedEnv, env)
+		}
+		container.Env = mergedEnv
 	}
 	return nil
 }
