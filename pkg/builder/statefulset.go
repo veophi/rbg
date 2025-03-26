@@ -27,7 +27,7 @@ func (b *StatefulSetBuilder) Build(ctx context.Context,
 	role *workloadsv1.RoleSpec,
 	injector discovery.ConfigInjector) (obj client.Object, err error) {
 	logger := log.FromContext(ctx)
-	logger.Info("start loging")
+	logger.V(1).Info("start loging")
 
 	// 1. 尝试获取现有 StatefulSet
 	sts := &appsv1.StatefulSet{}

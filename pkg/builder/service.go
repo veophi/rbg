@@ -23,7 +23,7 @@ func (s *ServiceBuilder) Build(ctx context.Context,
 	rbg *workloadsv1.RoleBasedGroup,
 	role *workloadsv1.RoleSpec,
 	injector discovery.ConfigInjector) (obj client.Object, err error) {
-	s.log.Info("start loging")
+	s.log.V(1).Info("start loging")
 
 	// Generate Service name (same as StatefulSet)
 	svcName := fmt.Sprintf("%s-%s", rbg.Name, role.Name)

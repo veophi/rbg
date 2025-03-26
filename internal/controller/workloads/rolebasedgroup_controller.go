@@ -67,7 +67,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 	logger := log.FromContext(ctx).WithValues("rolebasedgroup", klog.KObj(rbg))
 	ctx = ctrl.LoggerInto(ctx, logger)
-	logger.Info("Starting reconciliation")
+	logger.V(1).Info("Starting reconciliation")
 
 	// Initialize status if needed
 	if rbg.Status.RoleStatuses == nil {
@@ -196,7 +196,7 @@ func (r *RoleBasedGroupReconciler) updateStatus(
 
 	if updateStatus {
 		if reflect.DeepEqual(oldStatus, newRbg.Status) {
-			log.Info("No need to update for old status %v and new status %v, because it's deepequal", oldStatus, newRbg.Status)
+			log.V(1).Info("No need to update for old status  and new status , because it's deepequal", "oldStatus", oldStatus, "newStatus", newRbg.Status)
 			return nil
 		}
 
@@ -207,7 +207,7 @@ func (r *RoleBasedGroupReconciler) updateStatus(
 			return err
 		}
 	} else {
-		log.Info("No need to update for old status %v and new status %v, because updateStatus is false", oldStatus, newRbg.Status)
+		log.V(1).Info("No need to update for old status  and new status , because it's deepequal", "oldStatus", oldStatus, "newStatus", newRbg.Status)
 	}
 
 	return nil
