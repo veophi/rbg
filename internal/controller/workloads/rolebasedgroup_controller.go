@@ -95,8 +95,10 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 		// Reconcile workload
 		if err := r.reconcileStatefulSet(ctx, rbg, role); err != nil {
+			// r.Recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
+			// 	"Failed to reconcile workload for role %s with type %s: %v", role.Name, role.Workload.Kind, err)
 			r.Recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
-				"Failed to reconcile workload for role %s with type %v: %v", role.Name, role.Workload, err)
+				"Failed to reconcile workload for role %s with group %s: %v", role.Name, rbg.Name, err)
 			return ctrl.Result{}, err
 		}
 

@@ -203,8 +203,9 @@ func main() {
 	}
 
 	if err = (&workloadscontroller.RoleBasedGroupReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("rolebasedgroup"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RoleBasedGroup")
 		os.Exit(1)
