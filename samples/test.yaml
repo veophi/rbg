@@ -14,7 +14,7 @@ spec:
       spec:
         containers:
         - name: nginx-leader
-          image: anolis-registry.cn-zhangjiakou.cr.aliyuncs.com/openanolis/nginx
+          image: anolis-registry.cn-zhangjiakou.cr.aliyuncs.com/openanolis/nginx:1.14.1-8.6
           ports:
           - containerPort: 80
 
@@ -27,7 +27,7 @@ spec:
       spec:
         containers:
         - name: nginx-worker
-          image: anolis-registry.cn-zhangjiakou.cr.aliyuncs.com/openanolis/nginx
+          image: anolis-registry.cn-zhangjiakou.cr.aliyuncs.com/openanolis/nginx:1.14.1-8.6
           ports:
           - containerPort: 8080
     servicePorts:

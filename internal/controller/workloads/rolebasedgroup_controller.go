@@ -125,7 +125,7 @@ func (r *RoleBasedGroupReconciler) reconcileStatefulSet(
 ) error {
 	logger := log.FromContext(ctx)
 	// 1. Create Builder and Injector
-	builder := &builder.StatefulSetBuilder{Scheme: r.Scheme}
+	builder := &builder.StatefulSetBuilder{Client: r.Client, Scheme: r.Scheme}
 	injector := discovery.NewDefaultInjector(r.Client, ctx, r.Scheme)
 
 	// 2. Build StatefulSet

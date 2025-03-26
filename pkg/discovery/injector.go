@@ -5,8 +5,10 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
@@ -36,9 +38,15 @@ func (i *DefaultInjector) InjectConfig(pod *corev1.Pod, rbg *workloadsv1.RoleBas
 	builder := &ConfigBuilder{
 		// Pod:       pod,
 		RBG:       rbg,
+		GroupName: rbg.GetName(),
 		RoleName:  roleName,
 		RoleIndex: index,
 	}
+	const (
+		volumeName = "rbg-cluster-config"
+		mountPath  = "/etc/rbg"
+		configKey  = "config.yaml"
+	)
 
 	configData, err := builder.Build()
 	if err != nil {
@@ -47,44 +55,67 @@ func (i *DefaultInjector) InjectConfig(pod *corev1.Pod, rbg *workloadsv1.RoleBas
 
 	cmName := fmt.Sprintf("%s-%s-rbg-cm", rbg.GetName(), roleName)
 
-	configMap := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cmName,
-			Namespace: rbg.Namespace,
-		},
-		Data: map[string]string{
-			"config.yaml": string(configData),
-		},
-	}
+	configMap := &corev1.ConfigMap{}
+	err = i.client.Get(i.ctx, types.NamespacedName{
+		Namespace: rbg.Namespace,
+		Name:      cmName,
+	}, configMap)
+	if err != nil && apierrors.IsNotFound(err) {
+		configMap = &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cmName,
+				Namespace: rbg.Namespace,
+			}, Data: make(map[string]string),
+		}
 
-	// 设置 OwnerReference
-	if err := controllerutil.SetControllerReference(rbg, configMap, i.scheme); err != nil {
+		// 设置 OwnerReference
+		if err := controllerutil.SetControllerReference(rbg, configMap, i.scheme); err != nil {
+			return err
+		}
+	} else if err != nil {
 		return err
 	}
+	configMap.Data[configKey] = string(configData)
 
-	pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
-		Name: "cluster-config",
-		VolumeSource: corev1.VolumeSource{
-			ConfigMap: &corev1.ConfigMapVolumeSource{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: cmName,
-				},
-				Items: []corev1.KeyToPath{
-					{Key: "config.yaml", Path: "config.yaml"},
+	volumeExists := false
+	for _, vol := range pod.Spec.Volumes {
+		if vol.Name == volumeName {
+			volumeExists = true
+			break
+		}
+	}
+	if !volumeExists {
+		pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
+			Name: volumeName,
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: cmName,
+					},
+					Items: []corev1.KeyToPath{
+						{Key: configKey, Path: configKey},
+					},
 				},
 			},
-		},
-	})
+		})
+	}
 
 	for i := range pod.Spec.Containers {
-		pod.Spec.Containers[i].VolumeMounts = append(
-			pod.Spec.Containers[i].VolumeMounts,
-			corev1.VolumeMount{
-				Name:      "group-config-rbg",
-				MountPath: "/etc/rbg",
+		container := &pod.Spec.Containers[i]
+		mountExists := false
+		for _, vm := range container.VolumeMounts {
+			if vm.Name == volumeName && vm.MountPath == mountPath {
+				mountExists = true
+				break
+			}
+		}
+		if !mountExists {
+			container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+				Name:      volumeName,
+				MountPath: mountPath,
 				ReadOnly:  true,
-			},
-		)
+			})
+		}
 	}
 
 	// Create/Update ConfigMap logic
