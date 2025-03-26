@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -96,9 +95,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 
 		// Reconcile workload
-		if err := r.reconcileStatefulSet(ctx, rbg, role, logger); err != nil {
-			// r.Recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
-			// 	"Failed to reconcile workload for role %s with type %s: %v", role.Name, role.Workload.Kind, err)
+		if err := r.reconcileStatefulSet(ctx, rbg, role); err != nil {
 			r.Recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
 				"Failed to reconcile workload for role %s with group %s: %v", role.Name, rbg.Name, err)
 			return ctrl.Result{}, err
@@ -125,8 +122,8 @@ func (r *RoleBasedGroupReconciler) reconcileStatefulSet(
 	ctx context.Context,
 	rbg *workloadsv1.RoleBasedGroup,
 	role *workloadsv1.RoleSpec,
-	logger logr.Logger,
 ) error {
+	logger := log.FromContext(ctx)
 	// 1. Create Builder and Injector
 	builder := &builder.StatefulSetBuilder{Scheme: r.Scheme}
 	injector := discovery.NewDefaultInjector(r.Client, ctx, r.Scheme)
