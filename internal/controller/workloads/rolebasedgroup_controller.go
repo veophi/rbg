@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -66,6 +67,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	logger := log.FromContext(ctx).WithValues("rolebasedgroup", klog.KObj(rbg))
+	ctx = ctrl.LoggerInto(ctx, logger)
 	logger.Info("Starting reconciliation")
 
 	// Initialize status if needed
@@ -94,7 +96,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 
 		// Reconcile workload
-		if err := r.reconcileStatefulSet(ctx, rbg, role); err != nil {
+		if err := r.reconcileStatefulSet(ctx, rbg, role, logger); err != nil {
 			// r.Recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
 			// 	"Failed to reconcile workload for role %s with type %s: %v", role.Name, role.Workload.Kind, err)
 			r.Recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
@@ -123,6 +125,7 @@ func (r *RoleBasedGroupReconciler) reconcileStatefulSet(
 	ctx context.Context,
 	rbg *workloadsv1.RoleBasedGroup,
 	role *workloadsv1.RoleSpec,
+	logger logr.Logger,
 ) error {
 	// 1. Create Builder and Injector
 	builder := &builder.StatefulSetBuilder{Scheme: r.Scheme}
@@ -133,6 +136,8 @@ func (r *RoleBasedGroupReconciler) reconcileStatefulSet(
 	if err != nil {
 		return err
 	}
+
+	logger.Info("statefulset info", "sts", sts)
 
 	// 3. Apply StatefulSet
 	return utils.CreateOrUpdate(ctx, r.Client, sts)

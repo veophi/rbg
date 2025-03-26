@@ -77,5 +77,7 @@ func (b *StatefulSetBuilder) Build(ctx context.Context,
 		return nil, err
 	}
 
+	b.log.Info("Statefulset: %v", sts)
+
 	return sts, nil
 }

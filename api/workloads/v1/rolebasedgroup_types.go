@@ -53,7 +53,8 @@ type RoleSpec struct {
 	Workload WorkloadSpec `json:"workload,omitempty"`
 
 	// Pod template specification
-	Template corev1.PodTemplateSpec `json:"spec,omitempty"`
+	// +kubebuilder:validation:Required
+	Template corev1.PodTemplateSpec `json:"template"`
 
 	// +optional
 	ServicePorts []corev1.ServicePort `json:"servicePorts,omitempty"`
