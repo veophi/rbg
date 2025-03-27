@@ -21,7 +21,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
@@ -151,7 +151,7 @@ func (in *RoleSpec) DeepCopyInto(out *RoleSpec) {
 	in.Template.DeepCopyInto(&out.Template)
 	if in.ServicePorts != nil {
 		in, out := &in.ServicePorts, &out.ServicePorts
-		*out = make([]corev1.ServicePort, len(*in))
+		*out = make([]v1.ServicePort, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
