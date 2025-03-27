@@ -16,7 +16,7 @@ func CreateOrUpdate(ctx context.Context, k8sClient client.Client, obj client.Obj
 	} else if err != nil {
 		return err
 	}
-
+	// TODO: check invalidate update
 	if !reflect.DeepEqual(obj, existing) {
 		return k8sClient.Update(ctx, obj)
 	}
