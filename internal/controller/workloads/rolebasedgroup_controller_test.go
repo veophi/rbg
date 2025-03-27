@@ -27,7 +27,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
+	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 )
 
 var _ = Describe("RoleBasedGroup Controller", func() {
@@ -40,13 +40,13 @@ var _ = Describe("RoleBasedGroup Controller", func() {
 			Name:      resourceName,
 			Namespace: "default", // TODO(user):Modify as needed
 		}
-		rolebasedgroup := &workloadsv1.RoleBasedGroup{}
+		rolebasedgroup := &workloadsv1alpha1.RoleBasedGroup{}
 
 		BeforeEach(func() {
 			By("creating the custom resource for the Kind RoleBasedGroup")
 			err := k8sClient.Get(ctx, typeNamespacedName, rolebasedgroup)
 			if err != nil && errors.IsNotFound(err) {
-				resource := &workloadsv1.RoleBasedGroup{
+				resource := &workloadsv1alpha1.RoleBasedGroup{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
 						Namespace: "default",
@@ -59,7 +59,7 @@ var _ = Describe("RoleBasedGroup Controller", func() {
 
 		AfterEach(func() {
 			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &workloadsv1.RoleBasedGroup{}
+			resource := &workloadsv1alpha1.RoleBasedGroup{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 

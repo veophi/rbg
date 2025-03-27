@@ -11,10 +11,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
+	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 )
 
-func CreateHeadlessServiceIfNotExists(ctx context.Context, k8sClient client.Client, Scheme *runtime.Scheme, rbg *workloadsv1.RoleBasedGroup, role *workloadsv1.RoleSpec, log logr.Logger) (err error) {
+func CreateHeadlessServiceIfNotExists(ctx context.Context, k8sClient client.Client, Scheme *runtime.Scheme, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec, log logr.Logger) (err error) {
 	// Generate Service name (same as StatefulSet)
 	svcName := fmt.Sprintf("%s-%s", rbg.Name, role.Name)
 
@@ -32,8 +32,8 @@ func CreateHeadlessServiceIfNotExists(ctx context.Context, k8sClient client.Clie
 			},
 			Spec: corev1.ServiceSpec{
 				ClusterIP: "None", // defines service as headless
-				Selector: map[string]string{workloadsv1.SetNameLabelKey: rbg.Name,
-					workloadsv1.SetRoleLabelKey: role.Name},
+				Selector: map[string]string{workloadsv1alpha1.SetNameLabelKey: rbg.Name,
+					workloadsv1alpha1.SetRoleLabelKey: role.Name},
 				PublishNotReadyAddresses: true,
 			},
 		}

@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
+	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/discovery"
 	"sigs.k8s.io/rbgs/pkg/utils"
 )
@@ -23,8 +23,8 @@ type StatefulSetBuilder struct {
 }
 
 func (b *StatefulSetBuilder) Build(ctx context.Context,
-	rbg *workloadsv1.RoleBasedGroup,
-	role *workloadsv1.RoleSpec,
+	rbg *workloadsv1alpha1.RoleBasedGroup,
+	role *workloadsv1alpha1.RoleSpec,
 	injector discovery.ConfigInjector) (obj client.Object, err error) {
 	logger := log.FromContext(ctx)
 	logger.V(1).Info("start loging")
