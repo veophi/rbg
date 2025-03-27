@@ -5,11 +5,11 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
+	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 )
 
 type EnvGenerator struct {
-	RBG       *workloadsv1.RoleBasedGroup
+	RBG       *workloadsv1alpha1.RoleBasedGroup
 	RoleName  string
 	RoleIndex int32
 }

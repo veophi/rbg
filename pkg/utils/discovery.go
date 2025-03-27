@@ -2,10 +2,10 @@ package utils
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
+	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 )
 
-func injectDiscoveryConfigToEnv(role *workloadsv1.RoleSpec) (envVars []corev1.EnvVar) {
+func injectDiscoveryConfigToEnv(role *workloadsv1alpha1.RoleSpec) (envVars []corev1.EnvVar) {
 	// Inject environment variables for service discovery
 	envVars = []corev1.EnvVar{
 		{

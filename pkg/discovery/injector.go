@@ -11,13 +11,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
+	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/utils"
 )
 
 type ConfigInjector interface {
-	InjectConfig(pod *corev1.Pod, rbg *workloadsv1.RoleBasedGroup, roleName string, index int32) error
-	InjectEnvVars(pod *corev1.Pod, rbg *workloadsv1.RoleBasedGroup, roleName string, index int32) error
+	InjectConfig(pod *corev1.Pod, rbg *workloadsv1alpha1.RoleBasedGroup, roleName string, index int32) error
+	InjectEnvVars(pod *corev1.Pod, rbg *workloadsv1alpha1.RoleBasedGroup, roleName string, index int32) error
 }
 
 type DefaultInjector struct {
@@ -34,7 +34,7 @@ func NewDefaultInjector(client client.Client, ctx context.Context, scheme *runti
 	}
 }
 
-func (i *DefaultInjector) InjectConfig(pod *corev1.Pod, rbg *workloadsv1.RoleBasedGroup, roleName string, index int32) error {
+func (i *DefaultInjector) InjectConfig(pod *corev1.Pod, rbg *workloadsv1alpha1.RoleBasedGroup, roleName string, index int32) error {
 	builder := &ConfigBuilder{
 		// Pod:       pod,
 		RBG:       rbg,
@@ -123,7 +123,7 @@ func (i *DefaultInjector) InjectConfig(pod *corev1.Pod, rbg *workloadsv1.RoleBas
 	return utils.CreateOrUpdate(i.ctx, i.client, configMap)
 }
 
-func (i *DefaultInjector) InjectEnvVars(pod *corev1.Pod, rbg *workloadsv1.RoleBasedGroup, roleName string, index int32) error {
+func (i *DefaultInjector) InjectEnvVars(pod *corev1.Pod, rbg *workloadsv1alpha1.RoleBasedGroup, roleName string, index int32) error {
 	generator := &EnvGenerator{
 		RBG:       rbg,
 		RoleName:  roleName,

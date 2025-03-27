@@ -16,6 +16,6 @@ resources:
   domain: x-k8s.io
   group: workloads
   kind: RoleBasedGroup
-  path: sigs.k8s.io/rbgs/api/workloads/v1
+  path: sigs.k8s.io/rbgs/api/workloads/v1alpha1
   version: v1
 version: "3"

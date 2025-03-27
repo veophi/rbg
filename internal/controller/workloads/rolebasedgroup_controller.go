@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
+	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/builder"
 	"sigs.k8s.io/rbgs/pkg/dependency"
 	"sigs.k8s.io/rbgs/pkg/discovery"
@@ -61,7 +61,7 @@ type RoleBasedGroupReconciler struct {
 // +kubebuilder:rbac:groups=workloads.x-k8s.io,resources=rolebasedgroups/finalizers,verbs=update
 func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	// Fetch the RoleBasedGroup instance
-	rbg := &workloadsv1.RoleBasedGroup{}
+	rbg := &workloadsv1alpha1.RoleBasedGroup{}
 	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, rbg); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -71,7 +71,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Initialize status if needed
 	if rbg.Status.RoleStatuses == nil {
-		rbg.Status.RoleStatuses = make([]workloadsv1.RoleStatus, 0)
+		rbg.Status.RoleStatuses = make([]workloadsv1alpha1.RoleStatus, 0)
 	}
 
 	// Process roles in dependency order
@@ -120,8 +120,8 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 func (r *RoleBasedGroupReconciler) reconcileStatefulSet(
 	ctx context.Context,
-	rbg *workloadsv1.RoleBasedGroup,
-	role *workloadsv1.RoleSpec,
+	rbg *workloadsv1alpha1.RoleBasedGroup,
+	role *workloadsv1alpha1.RoleSpec,
 ) error {
 	logger := log.FromContext(ctx)
 	// 1. Create Builder and Injector
@@ -142,8 +142,8 @@ func (r *RoleBasedGroupReconciler) reconcileStatefulSet(
 
 func (r *RoleBasedGroupReconciler) reconcileService(
 	ctx context.Context,
-	rbg *workloadsv1.RoleBasedGroup,
-	role *workloadsv1.RoleSpec,
+	rbg *workloadsv1alpha1.RoleBasedGroup,
+	role *workloadsv1alpha1.RoleSpec,
 ) error {
 	// 1. Create Builder and Injector
 	builder := &builder.ServiceBuilder{Scheme: r.Scheme}
@@ -161,11 +161,11 @@ func (r *RoleBasedGroupReconciler) reconcileService(
 
 func (r *RoleBasedGroupReconciler) updateStatus(
 	ctx context.Context,
-	rbg *workloadsv1.RoleBasedGroup,
+	rbg *workloadsv1alpha1.RoleBasedGroup,
 ) error {
 	// updateStatus := false
 	log := ctrl.LoggerFrom(ctx)
-	oldRbg := &workloadsv1.RoleBasedGroup{}
+	oldRbg := &workloadsv1alpha1.RoleBasedGroup{}
 	if err := r.Client.Get(ctx, types.NamespacedName{
 		Name:      rbg.Name,
 		Namespace: rbg.Namespace,
@@ -213,19 +213,19 @@ func (r *RoleBasedGroupReconciler) updateStatus(
 	return nil
 }
 
-func makeCondition(conditionType workloadsv1.RoleBasedGroupConditionType) metav1.Condition {
+func makeCondition(conditionType workloadsv1alpha1.RoleBasedGroupConditionType) metav1.Condition {
 	var condtype, reason, message string
 	switch conditionType {
-	case workloadsv1.RoleBasedGroupAvailable:
-		condtype = string(workloadsv1.RoleBasedGroupAvailable)
+	case workloadsv1alpha1.RoleBasedGroupAvailable:
+		condtype = string(workloadsv1alpha1.RoleBasedGroupAvailable)
 		reason = "AllRolesReady"
 		message = "All replicas are ready"
-	case workloadsv1.RoleBasedGroupUpdateInProgress:
-		condtype = string(workloadsv1.RoleBasedGroupUpdateInProgress)
+	case workloadsv1alpha1.RoleBasedGroupUpdateInProgress:
+		condtype = string(workloadsv1alpha1.RoleBasedGroupUpdateInProgress)
 		reason = RolesUpdating
 		message = "Rolling Upgrade is in progress"
 	default:
-		condtype = string(workloadsv1.RoleBasedGroupProgressing)
+		condtype = string(workloadsv1alpha1.RoleBasedGroupProgressing)
 		reason = RolesProgressing
 		message = "Replicas are progressing"
 	}
@@ -243,7 +243,7 @@ func makeCondition(conditionType workloadsv1.RoleBasedGroupConditionType) metav1
 // SetupWithManager sets up the controller with the Manager.
 func (r *RoleBasedGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&workloadsv1.RoleBasedGroup{}).
+		For(&workloadsv1alpha1.RoleBasedGroup{}).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).
 		Named("workloads-rolebasedgroup").

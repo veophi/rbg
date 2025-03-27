@@ -22,6 +22,9 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the {{ .ProjectName }} itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- workloads.x-k8s.io_rolebasedgroup_admin_role.yaml
+- workloads.x-k8s.io_rolebasedgroup_editor_role.yaml
+- workloads.x-k8s.io_rolebasedgroup_viewer_role.yaml
 - workloads_rolebasedgroup_admin_role.yaml
 - workloads_rolebasedgroup_editor_role.yaml
 - workloads_rolebasedgroup_viewer_role.yaml

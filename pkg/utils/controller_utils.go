@@ -2,14 +2,14 @@ package utils
 
 import (
 	appsv1 "k8s.io/api/apps/v1"
-	workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
+	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 )
 
-func SortRolesByDependencies(rbg *workloadsv1.RoleBasedGroup) (roles []*workloadsv1.RoleSpec, err error) {
+func SortRolesByDependencies(rbg *workloadsv1alpha1.RoleBasedGroup) (roles []*workloadsv1alpha1.RoleSpec, err error) {
 	// Implementation of topological sort based on dependencies
 	// ... (omitted for brevity)
 	// return rbg.Spec.Roles, nil
-	roles = make([]*workloadsv1.RoleSpec, len(rbg.Spec.Roles))
+	roles = make([]*workloadsv1alpha1.RoleSpec, len(rbg.Spec.Roles))
 	for i, role := range rbg.Spec.Roles {
 		roles[i] = &role
 	}
@@ -17,14 +17,14 @@ func SortRolesByDependencies(rbg *workloadsv1.RoleBasedGroup) (roles []*workload
 
 }
 
-func CheckDependencies(rbg *workloadsv1.RoleBasedGroup, role *workloadsv1.RoleSpec) (bool, error) {
+func CheckDependencies(rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) (bool, error) {
 	// Check if all dependencies are ready
 	// ... (omitted for brevity)
 	return true, nil
 }
 
 func UpdateRoleReplicas(
-	cr *workloadsv1.RoleBasedGroup,
+	cr *workloadsv1alpha1.RoleBasedGroup,
 	roleName string,
 	sts *appsv1.StatefulSet,
 ) bool {
@@ -44,7 +44,7 @@ func UpdateRoleReplicas(
 	}
 
 	if index == -1 {
-		cr.Status.RoleStatuses = append(cr.Status.RoleStatuses, workloadsv1.RoleStatus{
+		cr.Status.RoleStatuses = append(cr.Status.RoleStatuses, workloadsv1alpha1.RoleStatus{
 			Name:          roleName,
 			Replicas:      replicas,
 			ReadyReplicas: sts.Status.ReadyReplicas,

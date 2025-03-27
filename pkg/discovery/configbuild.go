@@ -7,11 +7,11 @@ import (
 	"sigs.k8s.io/yaml"
 
 	corev1 "k8s.io/api/core/v1"
-	workloadsv1 "sigs.k8s.io/rbgs/api/workloads/v1"
+	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 )
 
 type ConfigBuilder struct {
-	RBG       *workloadsv1.RoleBasedGroup
+	RBG       *workloadsv1alpha1.RoleBasedGroup
 	GroupName string
 	RoleName  string
 	RoleIndex int32
@@ -71,7 +71,7 @@ func (b *ConfigBuilder) buildRolesInfo() RolesInfo {
 	return roles
 }
 
-func (b *ConfigBuilder) buildInstances(role workloadsv1.RoleSpec) []Instance {
+func (b *ConfigBuilder) buildInstances(role workloadsv1alpha1.RoleSpec) []Instance {
 	instances := make([]Instance, 0, *role.Replicas)
 	serviceName := fmt.Sprintf("%s-%s", b.GroupName, role.Name)
 
