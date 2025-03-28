@@ -246,11 +246,10 @@ func makeCondition(conditionType workloadsv1alpha1.RoleBasedGroupConditionType) 
 func (r *RoleBasedGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	pred := predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			_, ok := e.ObjectOld.(*workloadsv1alpha1.RoleBasedGroup)
+			oldRbg, ok := e.ObjectOld.(*workloadsv1alpha1.RoleBasedGroup)
 			if !ok {
 				return false
 			}
-			oldRbg := e.ObjectOld.(*workloadsv1alpha1.RoleBasedGroup)
 			newRbg := e.ObjectNew.(*workloadsv1alpha1.RoleBasedGroup)
 			return !reflect.DeepEqual(oldRbg.Spec, newRbg.Spec)
 		},
