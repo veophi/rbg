@@ -3,6 +3,8 @@ package utils
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
 
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,9 +52,27 @@ func ConstructStatefulsetByRole(rbg *workloadsv1alpha1.RoleBasedGroup, role *wor
 }
 
 func ReconcileStatefulSet(ctx context.Context, k8sClient client.Client, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec, scheme *runtime.Scheme) (err error) {
-	sts, err := ConstructStatefulsetByRole(rbg, role, scheme)
+	sts, err := ConstructStatefulsetApplyConfigurationByRole(rbg, role)
 	if err != nil {
 		return
 	}
-	return CreateOrUpdate(ctx, k8sClient, sts)
+	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(sts)
+	if err != nil {
+		return err
+	}
+	workerStatefulSet := &unstructured.Unstructured{
+		Object: obj,
+	}
+
+	var workerSts appsv1.StatefulSet
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: role.Name, Namespace: rbg.Namespace}, &workerSts); err != nil {
+		if client.IgnoreNotFound(err) != nil {
+			return err
+		}
+		if err = k8sClient.Create(ctx, workerStatefulSet); err != nil {
+			return client.IgnoreAlreadyExists(err)
+		}
+	}
+
+	return nil
 }

@@ -210,6 +210,12 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "RoleBasedGroup")
 		os.Exit(1)
 	}
+
+	rbgsReconciler := workloadscontroller.NewRoleBasedGroupSetReconciler(mgr)
+	if err = rbgsReconciler.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "RoleBasedGroupSet")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if metricsCertWatcher != nil {
