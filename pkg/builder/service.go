@@ -3,6 +3,7 @@ package builder
 import (
 	"context"
 	"fmt"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -15,15 +16,24 @@ import (
 )
 
 type ServiceBuilder struct {
-	Scheme *runtime.Scheme
-	log    logr.Logger
+	scheme *runtime.Scheme
+	client client.Client
+	logger logr.Logger
 }
 
-func (s *ServiceBuilder) Build(ctx context.Context,
+func NewServiceBuilder(ctx context.Context, scheme *runtime.Scheme, client client.Client) *ServiceBuilder {
+	return &ServiceBuilder{
+		scheme: scheme,
+		client: client,
+		logger: log.FromContext(ctx).WithName("ServiceBuilder"),
+	}
+}
+
+func (s *ServiceBuilder) Build(
 	rbg *workloadsv1alpha1.RoleBasedGroup,
 	role *workloadsv1alpha1.RoleSpec,
-	injector discovery.ConfigInjector) (obj client.Object, err error) {
-	s.log.V(1).Info("start loging")
+	injector discovery.GroupInjector) (obj client.Object, err error) {
+	s.logger.V(1).Info("start to build service")
 
 	// Generate Service name (same as StatefulSet)
 	svcName := fmt.Sprintf("%s-%s", rbg.Name, role.Name)
@@ -43,7 +53,7 @@ func (s *ServiceBuilder) Build(ctx context.Context,
 		},
 	}
 
-	err = controllerutil.SetControllerReference(rbg, service, s.Scheme)
+	err = controllerutil.SetControllerReference(rbg, service, s.scheme)
 	if err != nil {
 		return
 	}

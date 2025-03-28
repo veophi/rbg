@@ -58,6 +58,9 @@ type RoleSpec struct {
 
 	// +optional
 	ServicePorts []corev1.ServicePort `json:"servicePorts,omitempty"`
+
+	// +optional
+	RuntimeEngine *RuntimeEngine `json:"runtimeEngine,omitempty"`
 }
 
 type WorkloadSpec struct {
@@ -69,6 +72,21 @@ type WorkloadSpec struct {
 	// +optional
 	// +kubebuilder:default="StatefulSet"
 	Kind string `json:"kind"`
+}
+
+type RuntimeEngine struct {
+
+	// +optional
+	Args []string `json:"args,omitempty"`
+
+	// +optional
+	Envs []corev1.EnvVar `json:"envs,omitempty"`
+
+	// +optional
+	MountGroupConfig bool `json:"mountGroupConfig,omitempty"`
+
+	// +optional
+	GroupConfigMountPath string `json:"groupConfigMountPath,omitempty"`
 }
 
 // RoleBasedGroupStatus defines the observed state of RoleBasedGroup.

@@ -3,6 +3,7 @@ package builder
 import (
 	"context"
 	"fmt"
+	"github.com/go-logr/logr"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -18,20 +19,29 @@ import (
 )
 
 type StatefulSetBuilder struct {
-	Scheme *runtime.Scheme
-	Client client.Client
+	scheme *runtime.Scheme
+	client client.Client
+	logger logr.Logger
 }
 
-func (b *StatefulSetBuilder) Build(ctx context.Context,
-	rbg *workloadsv1alpha1.RoleBasedGroup,
+func NewStatefulSetBuilder(ctx context.Context, scheme *runtime.Scheme, client client.Client) *StatefulSetBuilder {
+	builder := &StatefulSetBuilder{
+		scheme: scheme,
+		client: client,
+	}
+	builder.logger = log.FromContext(ctx).WithName("StatefulSetBuilder")
+	return builder
+}
+
+func (b *StatefulSetBuilder) Build(rbg *workloadsv1alpha1.RoleBasedGroup,
 	role *workloadsv1alpha1.RoleSpec,
-	injector discovery.ConfigInjector) (obj client.Object, err error) {
-	logger := log.FromContext(ctx)
-	logger.V(1).Info("start loging")
+	injector discovery.GroupInjector) (obj client.Object, err error) {
+
+	b.logger.Info("start to build sts")
 
 	// 1. 尝试获取现有 StatefulSet
 	sts := &appsv1.StatefulSet{}
-	err = b.Client.Get(ctx, client.ObjectKey{
+	err = b.client.Get(context.TODO(), client.ObjectKey{
 		Name:      fmt.Sprintf("%s-%s", rbg.Name, role.Name),
 		Namespace: rbg.Namespace,
 	}, sts)
@@ -76,25 +86,31 @@ func (b *StatefulSetBuilder) Build(ctx context.Context,
 		Spec:       *sts.Spec.Template.Spec.DeepCopy(),
 	}
 
-	if err := injector.InjectConfig(dummyPod, rbg, role.Name, 0); err != nil {
+	if err := injector.InjectConfig(dummyPod, rbg, role.Name, -1); err != nil {
 		return nil, fmt.Errorf("failed to inject config: %w", err)
 	}
 
 	// 3. 注入环境变量
-	if err := injector.InjectEnvVars(dummyPod, rbg, role.Name, 0); err != nil {
+	if err := injector.InjectEnvVars(dummyPod, rbg, role.Name, -1); err != nil {
 		return nil, fmt.Errorf("failed to inject env vars: %w", err)
 	}
 
-	// 4. 回写修改后的模板
+	// 4. 注入sidecar
+
+	if err := injector.InjectSidecar(dummyPod, rbg, role.Name, -1); err != nil {
+		return nil, fmt.Errorf("failed to inject env vars: %w", err)
+	}
+
+	// 5. 回写修改后的模板
 	sts.Spec.Template.ObjectMeta = dummyPod.ObjectMeta
 	sts.Spec.Template.Spec = dummyPod.Spec
 
 	// 5. 设置 OwnerReference
-	if err := controllerutil.SetControllerReference(rbg, sts, b.Scheme); err != nil {
+	if err := controllerutil.SetControllerReference(rbg, sts, b.scheme); err != nil {
 		return nil, err
 	}
 
-	logger.Info("Build Statefulset", "statefulset", sts)
+	b.logger.Info("Build Statefulset", "statefulset", sts)
 
 	return sts, nil
 }
