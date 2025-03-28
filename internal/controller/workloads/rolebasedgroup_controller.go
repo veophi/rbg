@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -242,10 +244,32 @@ func makeCondition(conditionType workloadsv1alpha1.RoleBasedGroupConditionType) 
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *RoleBasedGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	pred := predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			_, ok := e.ObjectOld.(*workloadsv1alpha1.RoleBasedGroup)
+			if !ok {
+				return false
+			}
+			oldRbg := e.ObjectOld.(*workloadsv1alpha1.RoleBasedGroup)
+			newRbg := e.ObjectNew.(*workloadsv1alpha1.RoleBasedGroup)
+			return !reflect.DeepEqual(oldRbg.Spec, newRbg.Spec)
+		},
+		CreateFunc: func(e event.CreateEvent) bool {
+			_, ok := e.Object.(*workloadsv1alpha1.RoleBasedGroup)
+			return ok
+		},
+		DeleteFunc: func(e event.TypedDeleteEvent[client.Object]) bool {
+			return true
+		},
+		GenericFunc: func(e event.GenericEvent) bool {
+			return false
+		},
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&workloadsv1alpha1.RoleBasedGroup{}).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).
 		Named("workloads-rolebasedgroup").
+		WithEventFilter(pred).
 		Complete(r)
 }
