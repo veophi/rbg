@@ -3,6 +3,7 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -15,26 +16,25 @@ import (
 	"sigs.k8s.io/rbgs/pkg/utils"
 )
 
-type ConfigInjector interface {
-	InjectConfig(pod *corev1.Pod, rbg *workloadsv1alpha1.RoleBasedGroup, roleName string, index int32) error
-	InjectEnvVars(pod *corev1.Pod, rbg *workloadsv1alpha1.RoleBasedGroup, roleName string, index int32) error
+type GroupInfoInjector interface {
+	InjectConfig(context context.Context, pod *corev1.Pod, rbg *workloadsv1alpha1.RoleBasedGroup, roleName string, index int32) error
+	InjectEnvVars(context context.Context, pod *corev1.Pod, rbg *workloadsv1alpha1.RoleBasedGroup, roleName string, index int32) error
+	InjectSidecar(context context.Context, pod *corev1.Pod, rbg *workloadsv1alpha1.RoleBasedGroup, roleName string, index int32) error
 }
 
 type DefaultInjector struct {
-	client client.Client
-	ctx    context.Context
 	scheme *runtime.Scheme
+	client client.Client
 }
 
-func NewDefaultInjector(client client.Client, ctx context.Context, scheme *runtime.Scheme) *DefaultInjector {
+func NewDefaultInjector(scheme *runtime.Scheme, client client.Client) *DefaultInjector {
 	return &DefaultInjector{
 		client: client,
-		ctx:    ctx,
 		scheme: scheme,
 	}
 }
 
-func (i *DefaultInjector) InjectConfig(pod *corev1.Pod, rbg *workloadsv1alpha1.RoleBasedGroup, roleName string, index int32) error {
+func (i *DefaultInjector) InjectConfig(ctx context.Context, pod *corev1.Pod, rbg *workloadsv1alpha1.RoleBasedGroup, roleName string, index int32) error {
 	builder := &ConfigBuilder{
 		// Pod:       pod,
 		RBG:       rbg,
@@ -56,7 +56,7 @@ func (i *DefaultInjector) InjectConfig(pod *corev1.Pod, rbg *workloadsv1alpha1.R
 	cmName := fmt.Sprintf("%s-%s-rbg-cm", rbg.GetName(), roleName)
 
 	configMap := &corev1.ConfigMap{}
-	err = i.client.Get(i.ctx, types.NamespacedName{
+	err = i.client.Get(ctx, types.NamespacedName{
 		Namespace: rbg.Namespace,
 		Name:      cmName,
 	}, configMap)
@@ -120,10 +120,10 @@ func (i *DefaultInjector) InjectConfig(pod *corev1.Pod, rbg *workloadsv1alpha1.R
 
 	// Create/Update ConfigMap logic
 	// return reconcileConfigMap(i.Client, rbg, configData)
-	return utils.CreateOrUpdate(i.ctx, i.client, configMap)
+	return utils.CreateOrUpdate(ctx, i.client, configMap)
 }
 
-func (i *DefaultInjector) InjectEnvVars(pod *corev1.Pod, rbg *workloadsv1alpha1.RoleBasedGroup, roleName string, index int32) error {
+func (i *DefaultInjector) InjectEnvVars(ctx context.Context, pod *corev1.Pod, rbg *workloadsv1alpha1.RoleBasedGroup, roleName string, index int32) error {
 	generator := &EnvGenerator{
 		RBG:       rbg,
 		RoleName:  roleName,
@@ -151,4 +151,17 @@ func (i *DefaultInjector) InjectEnvVars(pod *corev1.Pod, rbg *workloadsv1alpha1.
 		container.Env = mergedEnv
 	}
 	return nil
+}
+
+func (i *DefaultInjector) InjectSidecar(ctx context.Context, pod *corev1.Pod, rbg *workloadsv1alpha1.RoleBasedGroup, roleName string, index int32) error {
+	logger := log.FromContext(ctx)
+	for _, container := range pod.Spec.Containers {
+		if container.Name == RuntimeContainerName {
+			logger.Info("Pod already has runtime sidecar, skip")
+			return nil
+		}
+	}
+
+	builder := NewSidecarBuilder(rbg, roleName)
+	return builder.Build(pod)
 }

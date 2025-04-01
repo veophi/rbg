@@ -3,7 +3,6 @@ package builder
 import (
 	"context"
 	"fmt"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -18,20 +17,28 @@ import (
 )
 
 type StatefulSetBuilder struct {
-	Scheme *runtime.Scheme
-	Client client.Client
+	scheme *runtime.Scheme
+	client client.Client
 }
 
-func (b *StatefulSetBuilder) Build(ctx context.Context,
-	rbg *workloadsv1alpha1.RoleBasedGroup,
-	role *workloadsv1alpha1.RoleSpec,
-	injector discovery.ConfigInjector) (obj client.Object, err error) {
+var _ ResourceBuilder = &StatefulSetBuilder{}
+
+func NewStatefulSetBuilder(scheme *runtime.Scheme, client client.Client) *StatefulSetBuilder {
+	builder := &StatefulSetBuilder{
+		scheme: scheme,
+		client: client,
+	}
+	return builder
+}
+
+func (b *StatefulSetBuilder) Build(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup,
+	role *workloadsv1alpha1.RoleSpec) (obj client.Object, err error) {
 	logger := log.FromContext(ctx)
-	logger.V(1).Info("start loging")
+	logger.Info("start to build sts")
 
 	// 1. 尝试获取现有 StatefulSet
 	sts := &appsv1.StatefulSet{}
-	err = b.Client.Get(ctx, client.ObjectKey{
+	err = b.client.Get(ctx, client.ObjectKey{
 		Name:      fmt.Sprintf("%s-%s", rbg.Name, role.Name),
 		Namespace: rbg.Namespace,
 	}, sts)
@@ -70,18 +77,24 @@ func (b *StatefulSetBuilder) Build(ctx context.Context,
 	utils.MergeMap(sts.Spec.Template.ObjectMeta.Labels, rbg.GetCommonLabelsFromRole(role))
 	utils.MergeMap(sts.Spec.Template.ObjectMeta.Annotations, rbg.GetCommonAnnotationsFromRole(role))
 
-	// 2. 注入配置
+	// 3. 注入配置
+	injector := discovery.NewDefaultInjector(b.scheme, b.client)
 	dummyPod := &corev1.Pod{
 		ObjectMeta: *sts.Spec.Template.ObjectMeta.DeepCopy(),
 		Spec:       *sts.Spec.Template.Spec.DeepCopy(),
 	}
 
-	if err := injector.InjectConfig(dummyPod, rbg, role.Name, 0); err != nil {
+	if err := injector.InjectConfig(ctx, dummyPod, rbg, role.Name, -1); err != nil {
 		return nil, fmt.Errorf("failed to inject config: %w", err)
 	}
 
-	// 3. 注入环境变量
-	if err := injector.InjectEnvVars(dummyPod, rbg, role.Name, 0); err != nil {
+	// 3.1 注入环境变量
+	if err := injector.InjectEnvVars(ctx, dummyPod, rbg, role.Name, -1); err != nil {
+		return nil, fmt.Errorf("failed to inject env vars: %w", err)
+	}
+
+	// 3.2. 注入sidecar
+	if err := injector.InjectSidecar(ctx, dummyPod, rbg, role.Name, -1); err != nil {
 		return nil, fmt.Errorf("failed to inject env vars: %w", err)
 	}
 
@@ -90,7 +103,7 @@ func (b *StatefulSetBuilder) Build(ctx context.Context,
 	sts.Spec.Template.Spec = dummyPod.Spec
 
 	// 5. 设置 OwnerReference
-	if err := controllerutil.SetControllerReference(rbg, sts, b.Scheme); err != nil {
+	if err := controllerutil.SetControllerReference(rbg, sts, b.scheme); err != nil {
 		return nil, err
 	}
 

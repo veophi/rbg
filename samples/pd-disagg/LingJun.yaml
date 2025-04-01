@@ -1,0 +1,72 @@
+apiVersion: workloads.x-k8s.io/v1alpha1
+kind: RoleBasedGroup
+metadata:
+  name: pd-schedule
+spec:
+  roles:
+    - name: scheduler
+      replicas: 1
+      template:
+        spec:
+          imagePullSecrets:
+            - name: acr-secret
+          volumes:
+            - name: model
+              persistentVolumeClaim:
+                claimName: llm-model
+            - name: scheduler-run
+              configMap:
+                name: scheduler-run
+                defaultMode: 0777
+          containers:
+            - name: scheduler
+              image: registry-vpc.ap-southeast-1.aliyuncs.com/zibai-test/vllm:oss_zmq_073_multi_with_scheduler_012
+              command:
+                - sh
+                - -c
+                - /app/run/scheduler-run.sh --instances-config-path=/etc/patio/instance-config.yaml --tokenizer-path=/models/Qwen2.5-Coder-1.5B-Instruct/tokenizer.json --cluster-scheduler=ForceSplit --instance-scheduler=LoadBalance --port=8008
+              ports:
+                - containerPort: 8008
+              volumeMounts:
+                - mountPath: /models/Qwen2.5-Coder-1.5B-Instruct
+                  name: model
+                - mountPath: /app/run/
+                  name: scheduler-run
+      runtimeEngine:
+        env:
+          - name: TOPO_CONFIG_FILE
+            value: /etc/patio/instance-config.yaml
+        mountGroupConfig: true
+        groupConfigMountPath: /etc/patio
+
+    - name: worker
+      replicas: 4
+      template:
+        spec:
+          imagePullSecrets:
+            - name: acr-secret
+          volumes:
+            - name: model
+              persistentVolumeClaim:
+                claimName: llm-model
+          containers:
+            - name: scheduler
+              image: registry-vpc.ap-southeast-1.aliyuncs.com/zibai-test/vllm:oss_zmq_073_multi_with_scheduler_012
+              command:
+                - sh
+                - -c
+                - pip install xformers; vllm serve /models/Qwen2.5-Coder-1.5B-Instruct --trust-remote-code --port=8000 --max-model-len 2048 --gpu-memory-utilization 0.95 --enforce-eager
+              ports:
+                - containerPort: 8000
+              resources:
+                limits:
+                  nvidia.com/gpu: "1"
+              volumeMounts:
+                - mountPath: /models/Qwen2.5-Coder-1.5B-Instruct
+                  name: model
+      runtimeEngine:
+        args:
+          - --instance-info={"topo_type":"LingJun"}
+        env:
+          - name: TOPO_COLLECTOR_ENDPOINT
+            value: http://pd-schedule-scheduler:8080
