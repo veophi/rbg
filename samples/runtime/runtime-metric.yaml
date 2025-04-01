@@ -28,7 +28,7 @@ spec:
                 - mountPath: /models/Qwen2.5-Coder-1.5B-Instruct
                   name: model
       runtimeEngine:
-        envs:
+        env:
           - name: INFERENCE_ENGINE
             value: vllm
           - name: INFERENCE_ENGINE_ENDPOINT

@@ -33,7 +33,7 @@ spec:
                 - mountPath: /app/run/
                   name: scheduler-run
       runtimeEngine:
-        envs:
+        env:
           - name: TOPO_CONFIG_FILE
             value: /etc/patio/instance-config.yaml
         mountGroupConfig: true
@@ -67,6 +67,6 @@ spec:
       runtimeEngine:
         args:
           - --instance-info={"topo_type":"LingJun"}
-        envs:
+        env:
           - name: TOPO_COLLECTOR_ENDPOINT
             value: http://pd-schedule-scheduler:8080

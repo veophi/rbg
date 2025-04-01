@@ -3,8 +3,6 @@ package builder
 import (
 	"context"
 	"fmt"
-	"github.com/go-logr/logr"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,27 +19,26 @@ import (
 type StatefulSetBuilder struct {
 	scheme *runtime.Scheme
 	client client.Client
-	logger logr.Logger
 }
 
-func NewStatefulSetBuilder(ctx context.Context, scheme *runtime.Scheme, client client.Client) *StatefulSetBuilder {
+var _ ResourceBuilder = &StatefulSetBuilder{}
+
+func NewStatefulSetBuilder(scheme *runtime.Scheme, client client.Client) *StatefulSetBuilder {
 	builder := &StatefulSetBuilder{
 		scheme: scheme,
 		client: client,
 	}
-	builder.logger = log.FromContext(ctx).WithName("StatefulSetBuilder")
 	return builder
 }
 
-func (b *StatefulSetBuilder) Build(rbg *workloadsv1alpha1.RoleBasedGroup,
-	role *workloadsv1alpha1.RoleSpec,
-	injector discovery.GroupInjector) (obj client.Object, err error) {
-
-	b.logger.Info("start to build sts")
+func (b *StatefulSetBuilder) Build(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup,
+	role *workloadsv1alpha1.RoleSpec) (obj client.Object, err error) {
+	logger := log.FromContext(ctx)
+	logger.Info("start to build sts")
 
 	// 1. 尝试获取现有 StatefulSet
 	sts := &appsv1.StatefulSet{}
-	err = b.client.Get(context.TODO(), client.ObjectKey{
+	err = b.client.Get(ctx, client.ObjectKey{
 		Name:      fmt.Sprintf("%s-%s", rbg.Name, role.Name),
 		Namespace: rbg.Namespace,
 	}, sts)
@@ -80,28 +77,28 @@ func (b *StatefulSetBuilder) Build(rbg *workloadsv1alpha1.RoleBasedGroup,
 	utils.MergeMap(sts.Spec.Template.ObjectMeta.Labels, rbg.GetCommonLabelsFromRole(role))
 	utils.MergeMap(sts.Spec.Template.ObjectMeta.Annotations, rbg.GetCommonAnnotationsFromRole(role))
 
-	// 2. 注入配置
+	// 3. 注入配置
+	injector := discovery.NewDefaultInjector(b.scheme, b.client)
 	dummyPod := &corev1.Pod{
 		ObjectMeta: *sts.Spec.Template.ObjectMeta.DeepCopy(),
 		Spec:       *sts.Spec.Template.Spec.DeepCopy(),
 	}
 
-	if err := injector.InjectConfig(dummyPod, rbg, role.Name, -1); err != nil {
+	if err := injector.InjectConfig(ctx, dummyPod, rbg, role.Name, -1); err != nil {
 		return nil, fmt.Errorf("failed to inject config: %w", err)
 	}
 
-	// 3. 注入环境变量
-	if err := injector.InjectEnvVars(dummyPod, rbg, role.Name, -1); err != nil {
+	// 3.1 注入环境变量
+	if err := injector.InjectEnvVars(ctx, dummyPod, rbg, role.Name, -1); err != nil {
 		return nil, fmt.Errorf("failed to inject env vars: %w", err)
 	}
 
-	// 4. 注入sidecar
-
-	if err := injector.InjectSidecar(dummyPod, rbg, role.Name, -1); err != nil {
+	// 3.2. 注入sidecar
+	if err := injector.InjectSidecar(ctx, dummyPod, rbg, role.Name, -1); err != nil {
 		return nil, fmt.Errorf("failed to inject env vars: %w", err)
 	}
 
-	// 5. 回写修改后的模板
+	// 4. 回写修改后的模板
 	sts.Spec.Template.ObjectMeta = dummyPod.ObjectMeta
 	sts.Spec.Template.Spec = dummyPod.Spec
 
@@ -110,7 +107,7 @@ func (b *StatefulSetBuilder) Build(rbg *workloadsv1alpha1.RoleBasedGroup,
 		return nil, err
 	}
 
-	b.logger.Info("Build Statefulset", "statefulset", sts)
+	logger.Info("Build Statefulset", "statefulset", sts)
 
 	return sts, nil
 }

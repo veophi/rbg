@@ -23,7 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -39,7 +38,6 @@ import (
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/builder"
 	"sigs.k8s.io/rbgs/pkg/dependency"
-	"sigs.k8s.io/rbgs/pkg/discovery"
 	"sigs.k8s.io/rbgs/pkg/utils"
 )
 
@@ -54,20 +52,16 @@ const (
 
 // RoleBasedGroupReconciler reconciles a RoleBasedGroup object
 type RoleBasedGroupReconciler struct {
-	ctx      context.Context
 	client   client.Client
 	scheme   *runtime.Scheme
 	recorder record.EventRecorder
-	logger   logr.Logger
 }
 
 func NewRoleBasedGroupReconciler(mgr ctrl.Manager) *RoleBasedGroupReconciler {
 	return &RoleBasedGroupReconciler{
-		ctx:      context.TODO(),
 		client:   mgr.GetClient(),
 		scheme:   mgr.GetScheme(),
 		recorder: mgr.GetEventRecorderFor("RoleBasedGroup"),
-		logger:   mgr.GetLogger().WithName("RoleBasedGroup"),
 	}
 }
 
@@ -80,9 +74,9 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err := r.client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, rbg); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	logger := r.logger.WithValues("rolebasedgroup", klog.KObj(rbg))
+	logger := log.FromContext(ctx).WithValues("rbg", klog.KObj(rbg))
 	ctx = ctrl.LoggerInto(ctx, logger)
-	logger.V(1).Info("Starting reconciliation")
+	logger.Info("Start reconciling")
 
 	// Initialize status if needed
 	if rbg.Status.RoleStatuses == nil {
@@ -90,8 +84,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Process roles in dependency order
-
-	dependencyManager := dependency.NewtDepencyManager(logger)
+	dependencyManager := dependency.NewDependencyManager()
 	sortedRoles, err := dependencyManager.SortRoles(rbg)
 	if err != nil {
 		r.recorder.Event(rbg, corev1.EventTypeWarning, "InvalidDependency", err.Error())
@@ -140,11 +133,10 @@ func (r *RoleBasedGroupReconciler) reconcileStatefulSet(
 ) error {
 	logger := log.FromContext(ctx)
 	// 1. Create Builder and Injector
-	stsBuilder := builder.NewStatefulSetBuilder(ctx, r.scheme, r.client)
-	injector := discovery.NewDefaultInjector(ctx, r.scheme, r.client)
+	stsBuilder := builder.NewStatefulSetBuilder(r.scheme, r.client)
 
 	// 2. Build StatefulSet
-	sts, err := stsBuilder.Build(rbg, role, injector)
+	sts, err := stsBuilder.Build(ctx, rbg, role)
 	if err != nil {
 		return err
 	}
@@ -160,17 +152,16 @@ func (r *RoleBasedGroupReconciler) reconcileService(
 	rbg *workloadsv1alpha1.RoleBasedGroup,
 	role *workloadsv1alpha1.RoleSpec,
 ) error {
-	// 1. Create Builder and Injector
-	svcBuilder := builder.NewServiceBuilder(ctx, r.scheme, r.client)
-	injector := discovery.NewDefaultInjector(ctx, r.scheme, r.client)
+	// 1. Create Service Builder
+	svcBuilder := builder.NewServiceBuilder(r.scheme, r.client)
 
-	// 2. Build StatefulSet
-	svc, err := svcBuilder.Build(rbg, role, injector)
+	// 2. Build Service
+	svc, err := svcBuilder.Build(ctx, rbg, role)
 	if err != nil {
 		return err
 	}
 
-	// 3. Apply StatefulSet
+	// 3. Apply Service
 	return utils.CreateOrUpdate(ctx, r.client, svc)
 }
 
@@ -179,7 +170,7 @@ func (r *RoleBasedGroupReconciler) updateStatus(
 	rbg *workloadsv1alpha1.RoleBasedGroup,
 ) error {
 	// updateStatus := false
-	log := ctrl.LoggerFrom(ctx)
+	logger := ctrl.LoggerFrom(ctx)
 	oldRbg := &workloadsv1alpha1.RoleBasedGroup{}
 	if err := r.client.Get(ctx, types.NamespacedName{
 		Name:      rbg.Name,
@@ -211,18 +202,18 @@ func (r *RoleBasedGroupReconciler) updateStatus(
 
 	if updateStatus {
 		if reflect.DeepEqual(oldStatus, newRbg.Status) {
-			log.V(1).Info("No need to update for old status  and new status , because it's deepequal", "oldStatus", oldStatus, "newStatus", newRbg.Status)
+			logger.V(1).Info("No need to update for old status  and new status , because it's deepequal", "oldStatus", oldStatus, "newStatus", newRbg.Status)
 			return nil
 		}
 
 		if err := r.client.Status().Update(ctx, newRbg); err != nil {
 			if !apierrors.IsConflict(err) {
-				log.Error(err, "Updating LeaderWorkerSet status and/or condition.")
+				logger.Error(err, "Updating LeaderWorkerSet status and/or condition.")
 			}
 			return err
 		}
 	} else {
-		log.V(1).Info("No need to update for old status  and new status , because it's deepequal", "oldStatus", oldStatus, "newStatus", newRbg.Status)
+		logger.V(1).Info("No need to update for old status  and new status , because it's deepequal", "oldStatus", oldStatus, "newStatus", newRbg.Status)
 	}
 
 	return nil

@@ -44,10 +44,15 @@ func (builder *SidecarBuilder) Build(pod *v1.Pod) error {
 		return nil
 	}
 
+	containerImage := RuntimeContainerImage
+	if curRole.RuntimeEngine.Image != "" {
+		containerImage = curRole.RuntimeEngine.Image
+	}
+
 	// 1. add runtime container
 	c := &v1.Container{
 		Name:  RuntimeContainerName,
-		Image: RuntimeContainerImage,
+		Image: containerImage,
 		Ports: []v1.ContainerPort{
 			{
 				ContainerPort: 8080,
@@ -68,7 +73,7 @@ func (builder *SidecarBuilder) Build(pod *v1.Pod) error {
 
 	c.Args = append(c.Args, curRole.RuntimeEngine.Args...)
 
-	c.Env = append(c.Env, curRole.RuntimeEngine.Envs...)
+	c.Env = append(c.Env, curRole.RuntimeEngine.Env...)
 
 	pod.Spec.Containers = append(pod.Spec.Containers, *c)
 
@@ -93,7 +98,7 @@ func (builder *SidecarBuilder) Build(pod *v1.Pod) error {
 			MountPath: mountPath,
 		}
 
-		for i := range len(pod.Spec.Containers) {
+		for i := range pod.Spec.Containers {
 			pod.Spec.Containers[i].VolumeMounts = append(pod.Spec.Containers[i].VolumeMounts, configVolumeMount)
 		}
 	}

@@ -75,12 +75,14 @@ type WorkloadSpec struct {
 }
 
 type RuntimeEngine struct {
+	// +optional
+	Image string `json:"image,omitempty"`
 
 	// +optional
 	Args []string `json:"args,omitempty"`
 
 	// +optional
-	Envs []corev1.EnvVar `json:"envs,omitempty"`
+	Env []corev1.EnvVar `json:"env,omitempty"`
 
 	// +optional
 	MountGroupConfig bool `json:"mountGroupConfig,omitempty"`

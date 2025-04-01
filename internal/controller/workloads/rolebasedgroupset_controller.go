@@ -19,17 +19,14 @@ package workloads
 import (
 	"context"
 	"fmt"
-	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sync"
 )
@@ -43,15 +40,13 @@ type RoleBasedGroupSetReconciler struct {
 	client   client.Client
 	scheme   *runtime.Scheme
 	recorder record.EventRecorder
-	logger   logr.Logger
 }
 
 func NewRoleBasedGroupSetReconciler(mgr ctrl.Manager) *RoleBasedGroupSetReconciler {
 	return &RoleBasedGroupSetReconciler{
 		client:   mgr.GetClient(),
 		scheme:   mgr.GetScheme(),
-		recorder: mgr.GetEventRecorderFor("rbgs-controller"),
-		logger:   mgr.GetLogger().WithName("rbgs-controller"),
+		recorder: mgr.GetEventRecorderFor("rbgset-controller"),
 	}
 }
 
@@ -61,38 +56,40 @@ func NewRoleBasedGroupSetReconciler(mgr ctrl.Manager) *RoleBasedGroupSetReconcil
 
 func (r *RoleBasedGroupSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	// Fetch the RoleBasedGroup instance
-	rbgs := &workloadsv1alpha1.RoleBasedGroupSet{}
-	if err := r.client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, rbgs); err != nil {
+	rbgset := &workloadsv1alpha1.RoleBasedGroupSet{}
+	if err := r.client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, rbgset); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	r.logger = r.logger.WithValues("rbgs", klog.KObj(rbgs))
-	r.logger.Info("Starting reconciliation")
+
+	logger := log.FromContext(ctx).WithValues("rbgset", klog.KObj(rbgset))
+	ctx = ctrl.LoggerInto(ctx, logger)
+	logger.Info("Start reconciling")
 
 	var rbglist workloadsv1alpha1.RoleBasedGroupList
 	opts := []client.ListOption{
-		client.InNamespace(rbgs.Namespace),
-		client.MatchingLabels{RoleBasedGroupSetKey: rbgs.Name},
+		client.InNamespace(rbgset.Namespace),
+		client.MatchingLabels{RoleBasedGroupSetKey: rbgset.Name},
 	}
-	err := r.client.List(context.TODO(), &rbglist, opts...)
+	err := r.client.List(ctx, &rbglist, opts...)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if len(rbglist.Items) >= int(*rbgs.Spec.Replicas) {
+	if len(rbglist.Items) >= int(*rbgset.Spec.Replicas) {
 		// TODO update
 		return ctrl.Result{}, nil
 	}
 
-	createNum := int(*rbgs.Spec.Replicas) - len(rbglist.Items)
+	createNum := int(*rbgset.Spec.Replicas) - len(rbglist.Items)
 	// create rbg
 	var wg sync.WaitGroup
 
 	for i := 1; i <= createNum; i++ {
 		wg.Add(1)
 		go func() {
-			err := createRBG(r.client, rbgs, r.scheme, &wg)
+			err := r.createRBG(ctx, rbgset, &wg)
 			if err != nil {
-				r.logger.Error(err, "create rbg failed.")
+				logger.Error(err, "create rbg failed.")
 			}
 		}()
 	}
@@ -101,22 +98,25 @@ func (r *RoleBasedGroupSetReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	return ctrl.Result{}, nil
 }
 
-func createRBG(client client.Client, rbgs *workloadsv1alpha1.RoleBasedGroupSet, schema *runtime.Scheme, wg *sync.WaitGroup) error {
+func (r *RoleBasedGroupSetReconciler) createRBG(
+	ctx context.Context,
+	rbgset *workloadsv1alpha1.RoleBasedGroupSet,
+	wg *sync.WaitGroup) error {
 	defer wg.Done()
 	rbg := workloadsv1alpha1.RoleBasedGroup{}
-	rbg.Namespace = rbgs.Namespace
-	rbg.GenerateName = fmt.Sprintf("%s-", rbgs.Name)
+	rbg.Namespace = rbgset.Namespace
+	rbg.GenerateName = fmt.Sprintf("%s-", rbgset.Name)
 	rbg.Labels = map[string]string{
-		RoleBasedGroupSetKey: rbgs.Name,
+		RoleBasedGroupSetKey: rbgset.Name,
 	}
 
-	if err := controllerutil.SetControllerReference(rbgs, &rbg, schema); err != nil {
+	if err := controllerutil.SetControllerReference(rbgset, &rbg, r.scheme); err != nil {
 		return err
 	}
 
-	rbg.Spec.Roles = rbgs.Spec.Template.Roles
+	rbg.Spec.Roles = rbgset.Spec.Template.Roles
 
-	err := client.Create(context.TODO(), &rbg)
+	err := r.client.Create(ctx, &rbg)
 	if err != nil {
 		return fmt.Errorf("create rbg error: %v", err)
 	}
@@ -125,17 +125,10 @@ func createRBG(client client.Client, rbgs *workloadsv1alpha1.RoleBasedGroupSet, 
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *RoleBasedGroupSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	pred := predicate.Funcs{
-		DeleteFunc: func(e event.TypedDeleteEvent[client.Object]) bool {
-			r.logger.Info(e.Object.GetName(), "type", reflect.ValueOf(e.Object))
-			return true
-		},
-	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&workloadsv1alpha1.RoleBasedGroupSet{}).
 		Owns(&workloadsv1alpha1.RoleBasedGroup{}).
-		Named("workloads-rbgs").
-		WithEventFilter(pred).
+		Named("workloads-rolebasedgroupset").
 		Complete(r)
 }

@@ -80,7 +80,7 @@ spec:
                               items:
                                 type: string
                               type: array
-                            envs:
+                            env:
                               items:
                                 description: EnvVar represents an environment variable
                                   present in a Container.
@@ -195,6 +195,8 @@ spec:
                                 type: object
                               type: array
                             groupConfigMountPath:
+                              type: string
+                            image:
                               type: string
                             mountGroupConfig:
                               type: boolean
