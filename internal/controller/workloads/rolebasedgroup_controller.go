@@ -19,10 +19,6 @@ package workloads
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -31,9 +27,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
+	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/builder"
@@ -103,13 +102,30 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 
 		// Reconcile workload
-		if err := r.reconcileStatefulSet(ctx, rbg, role); err != nil {
-			r.recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
-				"Failed to reconcile workload for role %s with group %s: %v", role.Name, rbg.Name, err)
-			return ctrl.Result{}, err
+		logger.Info("start reconcile workload")
+		workloadType := getWorkloadType(role.Workload.APIVersion, role.Workload.Kind)
+		switch workloadType {
+		case "Deployment":
+			if err := r.reconcileDeployment(ctx, rbg, role); err != nil {
+				r.recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
+					"Failed to reconcile workload for role %s with group %s: %v", role.Name, rbg.Name, err)
+				return ctrl.Result{}, err
+			}
+		case "StatefulSet":
+			if err := r.reconcileStatefulSet(ctx, rbg, role); err != nil {
+				r.recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
+					"Failed to reconcile workload for role %s with group %s: %v", role.Name, rbg.Name, err)
+				return ctrl.Result{}, err
+			}
+		default:
+			logger.Error(fmt.Errorf("workload not supported : %s/%s",
+				role.Workload.APIVersion, role.Workload.Kind), "Workload not supported")
+			return ctrl.Result{}, fmt.Errorf("workload not supported : %s/%s",
+				role.Workload.APIVersion, role.Workload.Kind)
 		}
 
 		// Reconcile Service
+		logger.Info("start reconcile service")
 		if err = r.reconcileService(ctx, rbg, role); err != nil {
 			r.recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
 				"Failed to create Service for role %s: %v", role.Name, err)
@@ -132,6 +148,7 @@ func (r *RoleBasedGroupReconciler) reconcileStatefulSet(
 	role *workloadsv1alpha1.RoleSpec,
 ) error {
 	logger := log.FromContext(ctx)
+
 	// 1. Create Builder and Injector
 	stsBuilder := builder.NewStatefulSetBuilder(r.scheme, r.client)
 
@@ -141,10 +158,32 @@ func (r *RoleBasedGroupReconciler) reconcileStatefulSet(
 		return err
 	}
 
-	logger.Info("statefulset info", "sts", sts)
+	logger.V(1).Info("statefulset info", "sts", utils.PrettyJson(sts))
 
 	// 3. Apply StatefulSet
 	return utils.CreateOrUpdate(ctx, r.client, sts)
+}
+
+func (r *RoleBasedGroupReconciler) reconcileDeployment(
+	ctx context.Context,
+	rbg *workloadsv1alpha1.RoleBasedGroup,
+	role *workloadsv1alpha1.RoleSpec,
+) error {
+	logger := log.FromContext(ctx)
+
+	// 1. Create Builder
+	deployBuilder := builder.NewDeploymentBuilder(r.scheme, r.client)
+
+	// 2. Build Deployment
+	deploy, err := deployBuilder.Build(ctx, rbg, role)
+	if err != nil {
+		return err
+	}
+
+	logger.V(1).Info("deploy info", "deploy", utils.PrettyJson(deploy))
+
+	// 3. Apply Deployment
+	return utils.CreateOrUpdate(ctx, r.client, deploy)
 }
 
 func (r *RoleBasedGroupReconciler) reconcileService(
@@ -185,19 +224,32 @@ func (r *RoleBasedGroupReconciler) updateStatus(
 	updateStatus := false
 
 	for _, role := range rbg.Spec.Roles {
-		// 生成 StatefulSet 名称
-		stsName := fmt.Sprintf("%s-%s", rbg.Name, role.Name)
-		// 获取关联的 StatefulSet
-		sts := &appsv1.StatefulSet{}
-		err := r.client.Get(ctx, types.NamespacedName{
-			Name:      stsName,
-			Namespace: rbg.Namespace,
-		}, sts)
+		name := fmt.Sprintf("%s-%s", rbg.Name, role.Name)
+		workload := getWorkloadType(role.Workload.APIVersion, role.Workload.Kind)
+		switch workload {
+		case "Deployment":
+			deploy := &appsv1.Deployment{}
+			err := r.client.Get(ctx, types.NamespacedName{
+				Name:      name,
+				Namespace: rbg.Namespace,
+			}, deploy)
+			if err != nil {
+				return err
+			}
+			updateStatus = utils.UpdateRoleReplicas(newRbg, role.Name, deploy.Spec.Replicas, deploy.Status.ReadyReplicas)
+		case "StatefulSet":
+			sts := &appsv1.StatefulSet{}
+			err := r.client.Get(ctx, types.NamespacedName{
+				Name:      name,
+				Namespace: rbg.Namespace,
+			}, sts)
 
-		if err != nil {
-			return err
+			if err != nil {
+				return err
+			}
+			updateStatus = utils.UpdateRoleReplicas(newRbg, role.Name, sts.Spec.Replicas, sts.Status.ReadyReplicas)
 		}
-		updateStatus = utils.UpdateRoleReplicas(newRbg, role.Name, sts)
+
 	}
 
 	if updateStatus {
@@ -244,6 +296,14 @@ func makeCondition(conditionType workloadsv1alpha1.RoleBasedGroupConditionType) 
 		Message:            message,
 	}
 	return condition
+}
+
+func getWorkloadType(apiVersion, kind string) string {
+	if apiVersion == "apps/v1" && kind == "Deployment" {
+		return "Deployment"
+	} else {
+		return "StatefulSet"
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -32,4 +33,12 @@ func MergeMap(target map[string]string, sources ...map[string]string) {
 			target[k] = v
 		}
 	}
+}
+
+func PrettyJson(obj interface{}) string {
+	data, err := json.MarshalIndent(obj, "", "  ")
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }

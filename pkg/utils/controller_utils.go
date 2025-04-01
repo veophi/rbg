@@ -1,7 +1,6 @@
 package utils
 
 import (
-	appsv1 "k8s.io/api/apps/v1"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 )
 
@@ -26,12 +25,13 @@ func CheckDependencies(rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1a
 func UpdateRoleReplicas(
 	cr *workloadsv1alpha1.RoleBasedGroup,
 	roleName string,
-	sts *appsv1.StatefulSet,
+	wlReplicas *int32,
+	wlReadyReplicas int32,
 ) bool {
 	updateStatus := false
 	replicas := int32(0)
-	if sts.Spec.Replicas != nil {
-		replicas = *sts.Spec.Replicas
+	if wlReplicas != nil {
+		replicas = *wlReplicas
 	}
 
 	// 查找或创建角色状态记录
@@ -47,7 +47,7 @@ func UpdateRoleReplicas(
 		cr.Status.RoleStatuses = append(cr.Status.RoleStatuses, workloadsv1alpha1.RoleStatus{
 			Name:          roleName,
 			Replicas:      replicas,
-			ReadyReplicas: sts.Status.ReadyReplicas,
+			ReadyReplicas: wlReadyReplicas,
 		})
 		updateStatus = true
 	} else {
@@ -58,8 +58,8 @@ func UpdateRoleReplicas(
 			updateStatus = true
 		}
 
-		if cr.Status.RoleStatuses[index].ReadyReplicas != sts.Status.ReadyReplicas {
-			cr.Status.RoleStatuses[index].ReadyReplicas = sts.Status.ReadyReplicas
+		if cr.Status.RoleStatuses[index].ReadyReplicas != wlReadyReplicas {
+			cr.Status.RoleStatuses[index].ReadyReplicas = wlReadyReplicas
 			updateStatus = true
 		}
 

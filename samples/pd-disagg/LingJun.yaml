@@ -50,7 +50,7 @@ spec:
               persistentVolumeClaim:
                 claimName: llm-model
           containers:
-            - name: scheduler
+            - name: vllm
               image: registry-vpc.ap-southeast-1.aliyuncs.com/zibai-test/vllm:oss_zmq_073_multi_with_scheduler_012
               command:
                 - sh

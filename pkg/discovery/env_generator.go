@@ -23,9 +23,14 @@ func (g *EnvGenerator) Generate() []corev1.EnvVar {
 	if sizeVar := g.buildRoleSizeVar(); sizeVar.Name != "" {
 		envMap[sizeVar.Name] = sizeVar
 	}
-	for _, env := range g.buildRoleAddressVars() {
-		envMap[env.Name] = env
+	if groupSizeVar := g.buildGroupSizeVar(); groupSizeVar.Name != "" {
+		envMap[groupSizeVar.Name] = groupSizeVar
 	}
+
+	// address env数量比较多并且可以通过以上env拼凑出来，暂不添加address env
+	//for _, env := range g.buildRoleAddressVars() {
+	//	envMap[env.Name] = env
+	//}
 
 	envVars := make([]corev1.EnvVar, 0, len(envMap))
 	for _, env := range envMap {
@@ -38,6 +43,17 @@ func (g *EnvGenerator) buildRoleSizeVar() corev1.EnvVar {
 	return corev1.EnvVar{
 		Name:  fmt.Sprintf("ROLES_%s_SIZE", strings.ToUpper(g.RoleName)),
 		Value: fmt.Sprintf("%d", *g.RBG.GetRole(g.RoleName).Replicas),
+	}
+}
+
+func (g *EnvGenerator) buildGroupSizeVar() corev1.EnvVar {
+	groupSize := 0
+	for _, role := range g.RBG.Spec.Roles {
+		groupSize += int(*role.Replicas)
+	}
+	return corev1.EnvVar{
+		Name:  "RBG_GROUP_SIZE",
+		Value: fmt.Sprintf("%d", groupSize),
 	}
 }
 
@@ -82,6 +98,10 @@ func (g *EnvGenerator) buildLocalRoleVars() (envVars []corev1.EnvVar) {
 	// Inject environment variables for service discovery
 	envVars = []corev1.EnvVar{
 		{
+			Name:  "GROUP_NAME",
+			Value: g.RBG.Name,
+		},
+		{
 			Name:  "ROLE_NAME",
 			Value: g.RoleName,
 		},
@@ -90,7 +110,7 @@ func (g *EnvGenerator) buildLocalRoleVars() (envVars []corev1.EnvVar) {
 			Name: "ROLE_INDEX",
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath: "metadata.annotations['apps.kubernetes.io/pod-index']",
+					FieldPath: "metadata.labels['apps.kubernetes.io/pod-index']",
 				},
 			},
 		},

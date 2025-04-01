@@ -8,6 +8,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -16,49 +17,49 @@ import (
 	"sigs.k8s.io/rbgs/pkg/utils"
 )
 
-type StatefulSetBuilder struct {
+type DeploymentBuilder struct {
 	scheme *runtime.Scheme
 	client client.Client
 }
 
-var _ ResourceBuilder = &StatefulSetBuilder{}
+var _ ResourceBuilder = &DeploymentBuilder{}
 
-func NewStatefulSetBuilder(scheme *runtime.Scheme, client client.Client) *StatefulSetBuilder {
-	builder := &StatefulSetBuilder{
+func NewDeploymentBuilder(scheme *runtime.Scheme, client client.Client) *DeploymentBuilder {
+	return &DeploymentBuilder{
 		scheme: scheme,
 		client: client,
 	}
-	return builder
 }
 
-func (b *StatefulSetBuilder) Build(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup,
-	role *workloadsv1alpha1.RoleSpec) (obj client.Object, err error) {
-	logger := log.FromContext(ctx)
-	logger.Info("start to build sts")
+func (b *DeploymentBuilder) Build(
+	ctx context.Context,
+	rbg *workloadsv1alpha1.RoleBasedGroup,
+	role *workloadsv1alpha1.RoleSpec,
+) (client.Object, error) {
 
-	// 1. 尝试获取现有 StatefulSet
-	sts := &appsv1.StatefulSet{}
-	err = b.client.Get(ctx, client.ObjectKey{
+	logger := log.FromContext(ctx)
+
+	// 1. 尝试获取现有 Deployment
+	deployment := &appsv1.Deployment{}
+	err := b.client.Get(ctx, client.ObjectKey{
 		Name:      fmt.Sprintf("%s-%s", rbg.Name, role.Name),
 		Namespace: rbg.Namespace,
-	}, sts)
-
+	}, deployment)
 	if err != nil && !apierrors.IsNotFound(err) {
-		return nil, fmt.Errorf("failed to get existing StatefulSet: %w", err)
+		return nil, fmt.Errorf("failed to get existing Deployment: %w", err)
 	}
 
-	// 2. 创建基础 StatefulSet
+	// 2. 创建基础 Deployment
 	if apierrors.IsNotFound(err) {
-		sts = &appsv1.StatefulSet{
+		deployment = &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        fmt.Sprintf("%s-%s", rbg.Name, role.Name),
 				Namespace:   rbg.Namespace,
 				Labels:      rbg.GetCommonLabelsFromRole(role),
 				Annotations: rbg.GetCommonAnnotationsFromRole(role),
 			},
-			Spec: appsv1.StatefulSetSpec{
-				ServiceName: fmt.Sprintf("%s-%s", rbg.Name, role.Name),
-				Replicas:    role.Replicas,
+			Spec: appsv1.DeploymentSpec{
+				Replicas: role.Replicas,
 				Selector: &metav1.LabelSelector{
 					MatchLabels: rbg.GetCommonLabelsFromRole(role),
 				},
@@ -72,17 +73,17 @@ func (b *StatefulSetBuilder) Build(ctx context.Context, rbg *workloadsv1alpha1.R
 		if template.ObjectMeta.Annotations == nil {
 			template.ObjectMeta.Annotations = make(map[string]string)
 		}
-		sts.Spec.Template = *template
+		deployment.Spec.Template = *template
 	}
 
-	utils.MergeMap(sts.Spec.Template.ObjectMeta.Labels, rbg.GetCommonLabelsFromRole(role))
-	utils.MergeMap(sts.Spec.Template.ObjectMeta.Annotations, rbg.GetCommonAnnotationsFromRole(role))
+	utils.MergeMap(deployment.Spec.Template.ObjectMeta.Labels, rbg.GetCommonLabelsFromRole(role))
+	utils.MergeMap(deployment.Spec.Template.ObjectMeta.Annotations, rbg.GetCommonAnnotationsFromRole(role))
 
 	// 3. 注入配置
 	injector := discovery.NewDefaultInjector(b.scheme, b.client)
 	dummyPod := &corev1.Pod{
-		ObjectMeta: *sts.Spec.Template.ObjectMeta.DeepCopy(),
-		Spec:       *sts.Spec.Template.Spec.DeepCopy(),
+		ObjectMeta: *deployment.Spec.Template.ObjectMeta.DeepCopy(),
+		Spec:       *deployment.Spec.Template.Spec.DeepCopy(),
 	}
 
 	if err := injector.InjectConfig(ctx, dummyPod, rbg, role.Name, -1); err != nil {
@@ -94,21 +95,20 @@ func (b *StatefulSetBuilder) Build(ctx context.Context, rbg *workloadsv1alpha1.R
 		return nil, fmt.Errorf("failed to inject env vars: %w", err)
 	}
 
-	// 3.2. 注入sidecar
+	// 3.2 注入sidecar
 	if err := injector.InjectSidecar(ctx, dummyPod, rbg, role.Name, -1); err != nil {
 		return nil, fmt.Errorf("failed to inject sidecar: %w", err)
 	}
 
 	// 4. 回写修改后的模板
-	sts.Spec.Template.ObjectMeta = dummyPod.ObjectMeta
-	sts.Spec.Template.Spec = dummyPod.Spec
+	deployment.Spec.Template.ObjectMeta = dummyPod.ObjectMeta
+	deployment.Spec.Template.Spec = dummyPod.Spec
 
 	// 5. 设置 OwnerReference
-	if err := controllerutil.SetControllerReference(rbg, sts, b.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(rbg, deployment, b.scheme); err != nil {
 		return nil, err
 	}
 
-	logger.Info("Build Statefulset", "statefulset", sts)
-
-	return sts, nil
+	logger.Info("Build Deployment", "deployment", klog.KObj(deployment))
+	return deployment, nil
 }
