@@ -91,10 +91,9 @@ func main() {
 				ec.LevelKey = "level"
 				ec.TimeKey = "time"
 				ec.CallerKey = "caller"
-				ec.EncodeLevel = zapcore.CapitalLevelEncoder
+				ec.EncodeLevel = zapcore.CapitalColorLevelEncoder
 				ec.EncodeCaller = zapcore.ShortCallerEncoder
 				ec.EncodeTime = zapcore.ISO8601TimeEncoder
-				ec.EncodeLevel = zapcore.CapitalColorLevelEncoder
 			},
 		},
 		ZapOpts: []rawzap.Option{

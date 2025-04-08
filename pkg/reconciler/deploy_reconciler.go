@@ -1,4 +1,4 @@
-package builder
+package reconciler
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -17,31 +18,32 @@ import (
 	"sigs.k8s.io/rbgs/pkg/utils"
 )
 
-type DeploymentBuilder struct {
+type DeploymentReconciler struct {
 	scheme *runtime.Scheme
 	client client.Client
 }
 
-var _ ResourceBuilder = &DeploymentBuilder{}
+var _ WorkloadReconciler = &DeploymentReconciler{}
 
-func NewDeploymentBuilder(scheme *runtime.Scheme, client client.Client) *DeploymentBuilder {
-	return &DeploymentBuilder{
-		scheme: scheme,
-		client: client,
-	}
+func NewDeploymentReconciler(scheme *runtime.Scheme, client client.Client) *DeploymentReconciler {
+	return &DeploymentReconciler{scheme: scheme, client: client}
 }
 
-func (b *DeploymentBuilder) Build(
-	ctx context.Context,
-	rbg *workloadsv1alpha1.RoleBasedGroup,
-	role *workloadsv1alpha1.RoleSpec,
-) (client.Object, error) {
+func (r *DeploymentReconciler) Reconciler(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) error {
+	deploy, err := r.buildDeploy(ctx, rbg, role)
+	if err != nil {
+		return err
+	}
 
+	return utils.CreateOrUpdate(ctx, r.client, deploy)
+}
+
+func (r *DeploymentReconciler) buildDeploy(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) (client.Object, error) {
 	logger := log.FromContext(ctx)
 
 	// 1. 尝试获取现有 Deployment
 	deployment := &appsv1.Deployment{}
-	err := b.client.Get(ctx, client.ObjectKey{
+	err := r.client.Get(ctx, client.ObjectKey{
 		Name:      fmt.Sprintf("%s-%s", rbg.Name, role.Name),
 		Namespace: rbg.Namespace,
 	}, deployment)
@@ -80,7 +82,7 @@ func (b *DeploymentBuilder) Build(
 	utils.MergeMap(deployment.Spec.Template.ObjectMeta.Annotations, rbg.GetCommonAnnotationsFromRole(role))
 
 	// 3. 注入配置
-	injector := discovery.NewDefaultInjector(b.scheme, b.client)
+	injector := discovery.NewDefaultInjector(r.scheme, r.client)
 	dummyPod := &corev1.Pod{
 		ObjectMeta: *deployment.Spec.Template.ObjectMeta.DeepCopy(),
 		Spec:       *deployment.Spec.Template.Spec.DeepCopy(),
@@ -105,10 +107,23 @@ func (b *DeploymentBuilder) Build(
 	deployment.Spec.Template.Spec = dummyPod.Spec
 
 	// 5. 设置 OwnerReference
-	if err := controllerutil.SetControllerReference(rbg, deployment, b.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(rbg, deployment, r.scheme); err != nil {
 		return nil, err
 	}
 
 	logger.Info("Build Deployment", "deployment", klog.KObj(deployment))
 	return deployment, nil
+}
+
+func (r *DeploymentReconciler) UpdateStatus(ctx context.Context, client client.Client, rbg *workloadsv1alpha1.RoleBasedGroup, newRbg *workloadsv1alpha1.RoleBasedGroup, roleName string) (bool, error) {
+	name := fmt.Sprintf("%s-%s", rbg.Name, roleName)
+	deploy := &appsv1.Deployment{}
+	if err := client.Get(ctx, types.NamespacedName{Name: name, Namespace: rbg.Namespace}, deploy); err != nil {
+		return false, err
+	}
+	return utils.UpdateRoleReplicas(newRbg, roleName, deploy.Spec.Replicas, deploy.Status.ReadyReplicas), nil
+}
+
+func (r *DeploymentReconciler) GetWorkloadType() string {
+	return "apps/v1/Deployment"
 }

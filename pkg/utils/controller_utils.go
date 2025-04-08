@@ -1,6 +1,11 @@
 package utils
 
 import (
+	"context"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"reflect"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 )
 
@@ -66,4 +71,25 @@ func UpdateRoleReplicas(
 	}
 
 	return updateStatus
+}
+
+func UpdateRbgStatus(
+	ctx context.Context,
+	client client.Client,
+	oldStatus *workloadsv1alpha1.RoleBasedGroupStatus,
+	newRbg *workloadsv1alpha1.RoleBasedGroup,
+) error {
+	logger := log.FromContext(ctx)
+	if reflect.DeepEqual(oldStatus, newRbg.Status) {
+		logger.V(1).Info("No need to update for old status  and new status , because it's deepequal", "oldStatus", oldStatus, "newStatus", newRbg.Status)
+		return nil
+	}
+
+	if err := client.Status().Update(ctx, newRbg); err != nil {
+		if !apierrors.IsConflict(err) {
+			logger.Error(err, "Updating LeaderWorkerSet status and/or condition.")
+		}
+		return err
+	}
+	return nil
 }

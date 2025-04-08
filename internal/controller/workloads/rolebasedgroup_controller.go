@@ -18,10 +18,8 @@ package workloads
 
 import (
 	"context"
-	"fmt"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -33,11 +31,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/rbgs/pkg/utils"
 
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
-	"sigs.k8s.io/rbgs/pkg/builder"
 	"sigs.k8s.io/rbgs/pkg/dependency"
-	"sigs.k8s.io/rbgs/pkg/utils"
+	"sigs.k8s.io/rbgs/pkg/reconciler"
 )
 
 const (
@@ -73,6 +71,9 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err := r.client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, rbg); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	newRbg := rbg.DeepCopy()
+	oldStatus := rbg.Status.DeepCopy()
+
 	logger := log.FromContext(ctx).WithValues("rbg", klog.KObj(rbg))
 	ctx = ctrl.LoggerInto(ctx, logger)
 	logger.Info("Start reconciling")
@@ -91,6 +92,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Reconcile each role
+	needUpdateStatus := false
 	for _, role := range sortedRoles {
 		// Check dependencies first
 		if ready, err := dependencyManager.CheckDependencies(rbg, role); !ready || err != nil {
@@ -101,174 +103,42 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{RequeueAfter: 5}, nil
 		}
 
-		// Reconcile workload
 		logger.Info("start reconcile workload")
-		workloadType := getWorkloadType(role.Workload.APIVersion, role.Workload.Kind)
-		switch workloadType {
-		case "Deployment":
-			if err := r.reconcileDeployment(ctx, rbg, role); err != nil {
-				r.recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
-					"Failed to reconcile workload for role %s with group %s: %v", role.Name, rbg.Name, err)
-				return ctrl.Result{}, err
-			}
-		case "StatefulSet":
-			if err := r.reconcileStatefulSet(ctx, rbg, role); err != nil {
-				r.recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
-					"Failed to reconcile workload for role %s with group %s: %v", role.Name, rbg.Name, err)
-				return ctrl.Result{}, err
-			}
-		default:
-			logger.Error(fmt.Errorf("workload not supported : %s/%s",
-				role.Workload.APIVersion, role.Workload.Kind), "Workload not supported")
-			return ctrl.Result{}, fmt.Errorf("workload not supported : %s/%s",
-				role.Workload.APIVersion, role.Workload.Kind)
+		reconciler, err := reconciler.NewWorkloadReconciler(
+			role.Workload.APIVersion,
+			role.Workload.Kind,
+			r.scheme,
+			r.client,
+		)
+		if err != nil {
+			logger.Error(err, "Failed to create workload reconciler")
+			return ctrl.Result{}, err
+
 		}
 
-		// Reconcile Service
-		logger.Info("start reconcile service")
-		if err = r.reconcileService(ctx, rbg, role); err != nil {
+		if err := reconciler.Reconciler(ctx, rbg, role); err != nil {
 			r.recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
-				"Failed to create Service for role %s: %v", role.Name, err)
+				"Failed to reconcile %s for role %s: %v", reconciler.GetWorkloadType(), role.Name, err)
+			return ctrl.Result{}, err
+		}
+
+		needUpdateStatus, err = reconciler.UpdateStatus(ctx, r.client, rbg, newRbg, role.Name)
+		if err != nil {
+			r.recorder.Eventf(rbg, corev1.EventTypeWarning, "UpdateStatusFailed",
+				"Failed to update status for %s: %v", rbg.Name, err)
 			return ctrl.Result{}, err
 		}
 	}
 
-	if err = r.updateStatus(ctx, rbg); err != nil {
-		r.recorder.Eventf(rbg, corev1.EventTypeWarning, "UpdateStatusFailed",
-			"Failed to update status for %s: %v", rbg.Name, err)
-		return ctrl.Result{}, err
-	}
-
-	return ctrl.Result{}, nil
-}
-
-func (r *RoleBasedGroupReconciler) reconcileStatefulSet(
-	ctx context.Context,
-	rbg *workloadsv1alpha1.RoleBasedGroup,
-	role *workloadsv1alpha1.RoleSpec,
-) error {
-	logger := log.FromContext(ctx)
-
-	// 1. Create Builder and Injector
-	stsBuilder := builder.NewStatefulSetBuilder(r.scheme, r.client)
-
-	// 2. Build StatefulSet
-	sts, err := stsBuilder.Build(ctx, rbg, role)
-	if err != nil {
-		return err
-	}
-
-	logger.V(1).Info("statefulset info", "sts", utils.PrettyJson(sts))
-
-	// 3. Apply StatefulSet
-	return utils.CreateOrUpdate(ctx, r.client, sts)
-}
-
-func (r *RoleBasedGroupReconciler) reconcileDeployment(
-	ctx context.Context,
-	rbg *workloadsv1alpha1.RoleBasedGroup,
-	role *workloadsv1alpha1.RoleSpec,
-) error {
-	logger := log.FromContext(ctx)
-
-	// 1. Create Builder
-	deployBuilder := builder.NewDeploymentBuilder(r.scheme, r.client)
-
-	// 2. Build Deployment
-	deploy, err := deployBuilder.Build(ctx, rbg, role)
-	if err != nil {
-		return err
-	}
-
-	logger.V(1).Info("deploy info", "deploy", utils.PrettyJson(deploy))
-
-	// 3. Apply Deployment
-	return utils.CreateOrUpdate(ctx, r.client, deploy)
-}
-
-func (r *RoleBasedGroupReconciler) reconcileService(
-	ctx context.Context,
-	rbg *workloadsv1alpha1.RoleBasedGroup,
-	role *workloadsv1alpha1.RoleSpec,
-) error {
-	// 1. Create Service Builder
-	svcBuilder := builder.NewServiceBuilder(r.scheme, r.client)
-
-	// 2. Build Service
-	svc, err := svcBuilder.Build(ctx, rbg, role)
-	if err != nil {
-		return err
-	}
-
-	// 3. Apply Service
-	return utils.CreateOrUpdate(ctx, r.client, svc)
-}
-
-func (r *RoleBasedGroupReconciler) updateStatus(
-	ctx context.Context,
-	rbg *workloadsv1alpha1.RoleBasedGroup,
-) error {
-	// updateStatus := false
-	logger := ctrl.LoggerFrom(ctx)
-	oldRbg := &workloadsv1alpha1.RoleBasedGroup{}
-	if err := r.client.Get(ctx, types.NamespacedName{
-		Name:      rbg.Name,
-		Namespace: rbg.Namespace,
-	}, oldRbg); err != nil {
-		return fmt.Errorf("failed to get fresh RBG: %w", err)
-	}
-	oldStatus := oldRbg.Status.DeepCopy()
-	newRbg := oldRbg.DeepCopy()
-
-	// 遍历所有角色, 构建索引
-	updateStatus := false
-
-	for _, role := range rbg.Spec.Roles {
-		name := fmt.Sprintf("%s-%s", rbg.Name, role.Name)
-		workload := getWorkloadType(role.Workload.APIVersion, role.Workload.Kind)
-		switch workload {
-		case "Deployment":
-			deploy := &appsv1.Deployment{}
-			err := r.client.Get(ctx, types.NamespacedName{
-				Name:      name,
-				Namespace: rbg.Namespace,
-			}, deploy)
-			if err != nil {
-				return err
-			}
-			updateStatus = utils.UpdateRoleReplicas(newRbg, role.Name, deploy.Spec.Replicas, deploy.Status.ReadyReplicas)
-		case "StatefulSet":
-			sts := &appsv1.StatefulSet{}
-			err := r.client.Get(ctx, types.NamespacedName{
-				Name:      name,
-				Namespace: rbg.Namespace,
-			}, sts)
-
-			if err != nil {
-				return err
-			}
-			updateStatus = utils.UpdateRoleReplicas(newRbg, role.Name, sts.Spec.Replicas, sts.Status.ReadyReplicas)
-		}
-
-	}
-
-	if updateStatus {
-		if reflect.DeepEqual(oldStatus, newRbg.Status) {
-			logger.V(1).Info("No need to update for old status  and new status , because it's deepequal", "oldStatus", oldStatus, "newStatus", newRbg.Status)
-			return nil
-		}
-
-		if err := r.client.Status().Update(ctx, newRbg); err != nil {
-			if !apierrors.IsConflict(err) {
-				logger.Error(err, "Updating LeaderWorkerSet status and/or condition.")
-			}
-			return err
+	if needUpdateStatus {
+		if err := utils.UpdateRbgStatus(ctx, r.client, oldStatus, newRbg); err != nil {
+			return ctrl.Result{}, err
 		}
 	} else {
 		logger.V(1).Info("No need to update for old status  and new status , because it's deepequal", "oldStatus", oldStatus, "newStatus", newRbg.Status)
 	}
 
-	return nil
+	return ctrl.Result{}, nil
 }
 
 func makeCondition(conditionType workloadsv1alpha1.RoleBasedGroupConditionType) metav1.Condition {
@@ -296,14 +166,6 @@ func makeCondition(conditionType workloadsv1alpha1.RoleBasedGroupConditionType) 
 		Message:            message,
 	}
 	return condition
-}
-
-func getWorkloadType(apiVersion, kind string) string {
-	if apiVersion == "apps/v1" && kind == "Deployment" {
-		return "Deployment"
-	} else {
-		return "StatefulSet"
-	}
 }
 
 // SetupWithManager sets up the controller with the Manager.

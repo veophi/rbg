@@ -1,4 +1,4 @@
-package builder
+package reconciler
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -16,29 +17,47 @@ import (
 	"sigs.k8s.io/rbgs/pkg/utils"
 )
 
-type StatefulSetBuilder struct {
+type StatefulSetReconciler struct {
 	scheme *runtime.Scheme
 	client client.Client
 }
 
-var _ ResourceBuilder = &StatefulSetBuilder{}
+var _ WorkloadReconciler = &StatefulSetReconciler{}
 
-func NewStatefulSetBuilder(scheme *runtime.Scheme, client client.Client) *StatefulSetBuilder {
-	builder := &StatefulSetBuilder{
+func NewStatefulSetReconciler(scheme *runtime.Scheme, client client.Client) *StatefulSetReconciler {
+	return &StatefulSetReconciler{
 		scheme: scheme,
 		client: client,
 	}
-	return builder
 }
 
-func (b *StatefulSetBuilder) Build(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup,
-	role *workloadsv1alpha1.RoleSpec) (obj client.Object, err error) {
+func (r *StatefulSetReconciler) Reconciler(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) error {
+	logger := log.FromContext(ctx)
+	logger.Info("start to reconciler sts workload")
+
+	sts, err := r.buildSts(ctx, rbg, role)
+	if err != nil {
+		return err
+	}
+	if err := utils.CreateOrUpdate(ctx, r.client, sts); err != nil {
+		return err
+	}
+
+	svc, err := r.buildHeadlessSvc(ctx, rbg, role)
+	if err != nil {
+		return err
+	}
+
+	return utils.CreateOrUpdate(ctx, r.client, svc)
+}
+
+func (r *StatefulSetReconciler) buildSts(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) (obj client.Object, err error) {
 	logger := log.FromContext(ctx)
 	logger.Info("start to build sts")
 
 	// 1. 尝试获取现有 StatefulSet
 	sts := &appsv1.StatefulSet{}
-	err = b.client.Get(ctx, client.ObjectKey{
+	err = r.client.Get(ctx, client.ObjectKey{
 		Name:      fmt.Sprintf("%s-%s", rbg.Name, role.Name),
 		Namespace: rbg.Namespace,
 	}, sts)
@@ -79,7 +98,7 @@ func (b *StatefulSetBuilder) Build(ctx context.Context, rbg *workloadsv1alpha1.R
 	utils.MergeMap(sts.Spec.Template.ObjectMeta.Annotations, rbg.GetCommonAnnotationsFromRole(role))
 
 	// 3. 注入配置
-	injector := discovery.NewDefaultInjector(b.scheme, b.client)
+	injector := discovery.NewDefaultInjector(r.scheme, r.client)
 	dummyPod := &corev1.Pod{
 		ObjectMeta: *sts.Spec.Template.ObjectMeta.DeepCopy(),
 		Spec:       *sts.Spec.Template.Spec.DeepCopy(),
@@ -104,11 +123,58 @@ func (b *StatefulSetBuilder) Build(ctx context.Context, rbg *workloadsv1alpha1.R
 	sts.Spec.Template.Spec = dummyPod.Spec
 
 	// 5. 设置 OwnerReference
-	if err := controllerutil.SetControllerReference(rbg, sts, b.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(rbg, sts, r.scheme); err != nil {
 		return nil, err
 	}
 
-	logger.Info("Build Statefulset", "statefulset", sts)
+	logger.V(1).Info("Build Statefulset", "statefulset", utils.PrettyJson(sts))
 
 	return sts, nil
+}
+
+func (r *StatefulSetReconciler) buildHeadlessSvc(
+	ctx context.Context,
+	rbg *workloadsv1alpha1.RoleBasedGroup,
+	role *workloadsv1alpha1.RoleSpec) (obj client.Object, err error) {
+	logger := log.FromContext(ctx)
+	logger.V(1).Info("start to build sts headless service")
+
+	// Generate Service name (same as StatefulSet)
+	svcName := fmt.Sprintf("%s-%s", rbg.Name, role.Name)
+
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        svcName,
+			Namespace:   rbg.Namespace,
+			Labels:      rbg.GetCommonLabelsFromRole(role),
+			Annotations: rbg.GetCommonAnnotationsFromRole(role),
+		},
+		Spec: corev1.ServiceSpec{
+			ClusterIP: "None", // defines service as headless
+			Selector: map[string]string{workloadsv1alpha1.SetNameLabelKey: rbg.Name,
+				workloadsv1alpha1.SetRoleLabelKey: role.Name},
+			PublishNotReadyAddresses: true,
+		},
+	}
+
+	err = controllerutil.SetControllerReference(rbg, service, r.scheme)
+	if err != nil {
+		return
+	}
+
+	return service, nil
+}
+
+func (r *StatefulSetReconciler) UpdateStatus(ctx context.Context, client client.Client, rbg *workloadsv1alpha1.RoleBasedGroup, newRbg *workloadsv1alpha1.RoleBasedGroup, roleName string) (bool, error) {
+	name := fmt.Sprintf("%s-%s", rbg.Name, roleName)
+	sts := &appsv1.StatefulSet{}
+	if err := client.Get(ctx, types.NamespacedName{Name: name, Namespace: rbg.Namespace}, sts); err != nil {
+		return false, err
+	}
+
+	return utils.UpdateRoleReplicas(newRbg, roleName, sts.Spec.Replicas, sts.Status.ReadyReplicas), nil
+}
+
+func (r *StatefulSetReconciler) GetWorkloadType() string {
+	return "apps/v1/StatefulSet"
 }
