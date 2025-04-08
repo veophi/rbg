@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"go.uber.org/zap/zapcore"
 	"os"
 	"path/filepath"
 
@@ -26,6 +27,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	rawzap "go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -83,6 +85,20 @@ func main() {
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	opts := zap.Options{
 		Development: true,
+		EncoderConfigOptions: []zap.EncoderConfigOption{
+			func(ec *zapcore.EncoderConfig) {
+				ec.MessageKey = "message"
+				ec.LevelKey = "level"
+				ec.TimeKey = "time"
+				ec.CallerKey = "caller"
+				ec.EncodeLevel = zapcore.CapitalColorLevelEncoder
+				ec.EncodeCaller = zapcore.ShortCallerEncoder
+				ec.EncodeTime = zapcore.ISO8601TimeEncoder
+			},
+		},
+		ZapOpts: []rawzap.Option{
+			rawzap.AddCaller(),
+		},
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()

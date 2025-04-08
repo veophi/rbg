@@ -1,7 +1,11 @@
 package utils
 
 import (
-	appsv1 "k8s.io/api/apps/v1"
+	"context"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"reflect"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 )
 
@@ -26,12 +30,13 @@ func CheckDependencies(rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1a
 func UpdateRoleReplicas(
 	cr *workloadsv1alpha1.RoleBasedGroup,
 	roleName string,
-	sts *appsv1.StatefulSet,
+	wlReplicas *int32,
+	wlReadyReplicas int32,
 ) bool {
 	updateStatus := false
 	replicas := int32(0)
-	if sts.Spec.Replicas != nil {
-		replicas = *sts.Spec.Replicas
+	if wlReplicas != nil {
+		replicas = *wlReplicas
 	}
 
 	// 查找或创建角色状态记录
@@ -47,7 +52,7 @@ func UpdateRoleReplicas(
 		cr.Status.RoleStatuses = append(cr.Status.RoleStatuses, workloadsv1alpha1.RoleStatus{
 			Name:          roleName,
 			Replicas:      replicas,
-			ReadyReplicas: sts.Status.ReadyReplicas,
+			ReadyReplicas: wlReadyReplicas,
 		})
 		updateStatus = true
 	} else {
@@ -58,12 +63,33 @@ func UpdateRoleReplicas(
 			updateStatus = true
 		}
 
-		if cr.Status.RoleStatuses[index].ReadyReplicas != sts.Status.ReadyReplicas {
-			cr.Status.RoleStatuses[index].ReadyReplicas = sts.Status.ReadyReplicas
+		if cr.Status.RoleStatuses[index].ReadyReplicas != wlReadyReplicas {
+			cr.Status.RoleStatuses[index].ReadyReplicas = wlReadyReplicas
 			updateStatus = true
 		}
 
 	}
 
 	return updateStatus
+}
+
+func UpdateRbgStatus(
+	ctx context.Context,
+	client client.Client,
+	oldStatus *workloadsv1alpha1.RoleBasedGroupStatus,
+	newRbg *workloadsv1alpha1.RoleBasedGroup,
+) error {
+	logger := log.FromContext(ctx)
+	if reflect.DeepEqual(oldStatus, newRbg.Status) {
+		logger.V(1).Info("No need to update for old status  and new status , because it's deepequal", "oldStatus", oldStatus, "newStatus", newRbg.Status)
+		return nil
+	}
+
+	if err := client.Status().Update(ctx, newRbg); err != nil {
+		if !apierrors.IsConflict(err) {
+			logger.Error(err, "Updating LeaderWorkerSet status and/or condition.")
+		}
+		return err
+	}
+	return nil
 }

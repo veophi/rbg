@@ -18,27 +18,24 @@ package workloads
 
 import (
 	"context"
-	"fmt"
-	"reflect"
-	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
+	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/rbgs/pkg/utils"
 
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
-	"sigs.k8s.io/rbgs/pkg/builder"
 	"sigs.k8s.io/rbgs/pkg/dependency"
-	"sigs.k8s.io/rbgs/pkg/utils"
+	"sigs.k8s.io/rbgs/pkg/reconciler"
 )
 
 const (
@@ -74,6 +71,9 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err := r.client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, rbg); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	newRbg := rbg.DeepCopy()
+	oldStatus := rbg.Status.DeepCopy()
+
 	logger := log.FromContext(ctx).WithValues("rbg", klog.KObj(rbg))
 	ctx = ctrl.LoggerInto(ctx, logger)
 	logger.Info("Start reconciling")
@@ -92,6 +92,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Reconcile each role
+	needUpdateStatus := false
 	for _, role := range sortedRoles {
 		// Check dependencies first
 		if ready, err := dependencyManager.CheckDependencies(rbg, role); !ready || err != nil {
@@ -102,121 +103,42 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{RequeueAfter: 5}, nil
 		}
 
-		// Reconcile workload
-		if err := r.reconcileStatefulSet(ctx, rbg, role); err != nil {
-			r.recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
-				"Failed to reconcile workload for role %s with group %s: %v", role.Name, rbg.Name, err)
-			return ctrl.Result{}, err
-		}
-
-		// Reconcile Service
-		if err = r.reconcileService(ctx, rbg, role); err != nil {
-			r.recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
-				"Failed to create Service for role %s: %v", role.Name, err)
-			return ctrl.Result{}, err
-		}
-	}
-
-	if err = r.updateStatus(ctx, rbg); err != nil {
-		r.recorder.Eventf(rbg, corev1.EventTypeWarning, "UpdateStatusFailed",
-			"Failed to update status for %s: %v", rbg.Name, err)
-		return ctrl.Result{}, err
-	}
-
-	return ctrl.Result{}, nil
-}
-
-func (r *RoleBasedGroupReconciler) reconcileStatefulSet(
-	ctx context.Context,
-	rbg *workloadsv1alpha1.RoleBasedGroup,
-	role *workloadsv1alpha1.RoleSpec,
-) error {
-	logger := log.FromContext(ctx)
-	// 1. Create Builder and Injector
-	stsBuilder := builder.NewStatefulSetBuilder(r.scheme, r.client)
-
-	// 2. Build StatefulSet
-	sts, err := stsBuilder.Build(ctx, rbg, role)
-	if err != nil {
-		return err
-	}
-
-	logger.Info("statefulset info", "sts", sts)
-
-	// 3. Apply StatefulSet
-	return utils.CreateOrUpdate(ctx, r.client, sts)
-}
-
-func (r *RoleBasedGroupReconciler) reconcileService(
-	ctx context.Context,
-	rbg *workloadsv1alpha1.RoleBasedGroup,
-	role *workloadsv1alpha1.RoleSpec,
-) error {
-	// 1. Create Service Builder
-	svcBuilder := builder.NewServiceBuilder(r.scheme, r.client)
-
-	// 2. Build Service
-	svc, err := svcBuilder.Build(ctx, rbg, role)
-	if err != nil {
-		return err
-	}
-
-	// 3. Apply Service
-	return utils.CreateOrUpdate(ctx, r.client, svc)
-}
-
-func (r *RoleBasedGroupReconciler) updateStatus(
-	ctx context.Context,
-	rbg *workloadsv1alpha1.RoleBasedGroup,
-) error {
-	// updateStatus := false
-	logger := ctrl.LoggerFrom(ctx)
-	oldRbg := &workloadsv1alpha1.RoleBasedGroup{}
-	if err := r.client.Get(ctx, types.NamespacedName{
-		Name:      rbg.Name,
-		Namespace: rbg.Namespace,
-	}, oldRbg); err != nil {
-		return fmt.Errorf("failed to get fresh RBG: %w", err)
-	}
-	oldStatus := oldRbg.Status.DeepCopy()
-	newRbg := oldRbg.DeepCopy()
-
-	// 遍历所有角色, 构建索引
-	updateStatus := false
-
-	for _, role := range rbg.Spec.Roles {
-		// 生成 StatefulSet 名称
-		stsName := fmt.Sprintf("%s-%s", rbg.Name, role.Name)
-		// 获取关联的 StatefulSet
-		sts := &appsv1.StatefulSet{}
-		err := r.client.Get(ctx, types.NamespacedName{
-			Name:      stsName,
-			Namespace: rbg.Namespace,
-		}, sts)
-
+		logger.Info("start reconcile workload")
+		reconciler, err := reconciler.NewWorkloadReconciler(
+			role.Workload.APIVersion,
+			role.Workload.Kind,
+			r.scheme,
+			r.client,
+		)
 		if err != nil {
-			return err
+			logger.Error(err, "Failed to create workload reconciler")
+			return ctrl.Result{}, err
+
 		}
-		updateStatus = utils.UpdateRoleReplicas(newRbg, role.Name, sts)
+
+		if err := reconciler.Reconciler(ctx, rbg, role); err != nil {
+			r.recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
+				"Failed to reconcile %s for role %s: %v", reconciler.GetWorkloadType(), role.Name, err)
+			return ctrl.Result{}, err
+		}
+
+		needUpdateStatus, err = reconciler.UpdateStatus(ctx, r.client, rbg, newRbg, role.Name)
+		if err != nil {
+			r.recorder.Eventf(rbg, corev1.EventTypeWarning, "UpdateStatusFailed",
+				"Failed to update status for %s: %v", rbg.Name, err)
+			return ctrl.Result{}, err
+		}
 	}
 
-	if updateStatus {
-		if reflect.DeepEqual(oldStatus, newRbg.Status) {
-			logger.V(1).Info("No need to update for old status  and new status , because it's deepequal", "oldStatus", oldStatus, "newStatus", newRbg.Status)
-			return nil
-		}
-
-		if err := r.client.Status().Update(ctx, newRbg); err != nil {
-			if !apierrors.IsConflict(err) {
-				logger.Error(err, "Updating LeaderWorkerSet status and/or condition.")
-			}
-			return err
+	if needUpdateStatus {
+		if err := utils.UpdateRbgStatus(ctx, r.client, oldStatus, newRbg); err != nil {
+			return ctrl.Result{}, err
 		}
 	} else {
 		logger.V(1).Info("No need to update for old status  and new status , because it's deepequal", "oldStatus", oldStatus, "newStatus", newRbg.Status)
 	}
 
-	return nil
+	return ctrl.Result{}, nil
 }
 
 func makeCondition(conditionType workloadsv1alpha1.RoleBasedGroupConditionType) metav1.Condition {
