@@ -2,43 +2,62 @@ package utils
 
 import (
 	"context"
-	"encoding/json"
-	"reflect"
-
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func CreateOrUpdate(ctx context.Context, k8sClient client.Client, obj client.Object) error {
-	existing := obj.DeepCopyObject().(client.Object)
-	err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), existing)
-	if err != nil && apierrors.IsNotFound(err) {
-		return k8sClient.Create(ctx, obj)
-	} else if err != nil {
+const (
+	FieldManager = "rbg"
+
+	PatchAll    PatchType = "all"
+	PatchSpec   PatchType = "spec"
+	PatchStatus PatchType = "status"
+)
+
+type PatchType string
+
+func PatchObjectApplyConfiguration(ctx context.Context, k8sClient client.Client, objApplyConfig interface{}, patchType PatchType) error {
+	logger := log.FromContext(ctx)
+	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(objApplyConfig)
+	if err != nil {
+		logger.Error(err, "Converting obj apply configuration to json.")
 		return err
 	}
-	// TODO: check invalidate update
-	if !reflect.DeepEqual(obj, existing) {
-		return k8sClient.Update(ctx, obj)
-	}
-	return nil
-}
 
-func MergeMap(target map[string]string, sources ...map[string]string) {
-	if target == nil {
-		return
+	patch := &unstructured.Unstructured{
+		Object: obj,
 	}
-	for _, src := range sources {
-		for k, v := range src {
-			target[k] = v
+	// Use server side apply and add fieldmanager to the rbg owned fields
+	// If there are conflicts in the fields owned by the rbg controller, rbg will obtain the ownership and force override
+	// these fields to the ones desired by the rbg controller
+	// TODO b/316776287 add E2E test for SSA
+	if patchType == PatchSpec || patchType == PatchAll {
+		err = k8sClient.Patch(ctx, patch, client.Apply, &client.PatchOptions{
+			FieldManager: FieldManager,
+			Force:        ptr.To[bool](true),
+		})
+		if err != nil {
+			logger.Error(err, "Using server side apply to patch object")
+			return err
 		}
 	}
-}
 
-func PrettyJson(obj interface{}) string {
-	data, err := json.MarshalIndent(obj, "", "  ")
-	if err != nil {
-		return ""
+	if patchType == PatchStatus || patchType == PatchAll {
+		err = k8sClient.Status().Patch(ctx, patch, client.Apply,
+			&client.SubResourcePatchOptions{
+				PatchOptions: client.PatchOptions{
+					FieldManager: FieldManager,
+					Force:        ptr.To[bool](true),
+				},
+			})
+		if err != nil {
+			logger.Error(err, "Using server side apply to patch object status")
+			return err
+		}
 	}
-	return string(data)
+
+	return nil
 }

@@ -20,7 +20,6 @@ import (
 	"context"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -31,11 +30,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/rbgs/pkg/utils"
-
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/dependency"
 	"sigs.k8s.io/rbgs/pkg/reconciler"
+	"sigs.k8s.io/rbgs/pkg/utils"
 )
 
 const (
@@ -71,17 +69,10 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err := r.client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, rbg); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	newRbg := rbg.DeepCopy()
-	oldStatus := rbg.Status.DeepCopy()
 
 	logger := log.FromContext(ctx).WithValues("rbg", klog.KObj(rbg))
 	ctx = ctrl.LoggerInto(ctx, logger)
 	logger.Info("Start reconciling")
-
-	// Initialize status if needed
-	if rbg.Status.RoleStatuses == nil {
-		rbg.Status.RoleStatuses = make([]workloadsv1alpha1.RoleStatus, 0)
-	}
 
 	// Process roles in dependency order
 	dependencyManager := dependency.NewDependencyManager()
@@ -92,7 +83,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Reconcile each role
-	needUpdateStatus := false
+	var roleStatuses []workloadsv1alpha1.RoleStatus
 	for _, role := range sortedRoles {
 		// Check dependencies first
 		if ready, err := dependencyManager.CheckDependencies(rbg, role); !ready || err != nil {
@@ -104,16 +95,10 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 
 		logger.Info("start reconcile workload")
-		reconciler, err := reconciler.NewWorkloadReconciler(
-			role.Workload.APIVersion,
-			role.Workload.Kind,
-			r.scheme,
-			r.client,
-		)
+		reconciler, err := reconciler.NewWorkloadReconciler(role.Workload.APIVersion, role.Workload.Kind, r.scheme, r.client)
 		if err != nil {
 			logger.Error(err, "Failed to create workload reconciler")
 			return ctrl.Result{}, err
-
 		}
 
 		if err := reconciler.Reconciler(ctx, rbg, role); err != nil {
@@ -122,50 +107,25 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, err
 		}
 
-		needUpdateStatus, err = reconciler.UpdateStatus(ctx, r.client, rbg, newRbg, role.Name)
+		roleStatus, err := reconciler.ConstructRoleStatus(ctx, rbg, role)
 		if err != nil {
-			r.recorder.Eventf(rbg, corev1.EventTypeWarning, "UpdateStatusFailed",
-				"Failed to update status for %s: %v", rbg.Name, err)
+			logger.Error(err, "Failed to construct role status")
 			return ctrl.Result{}, err
 		}
+		roleStatuses = append(roleStatuses, roleStatus)
 	}
 
-	if needUpdateStatus {
-		if err := utils.UpdateRbgStatus(ctx, r.client, oldStatus, newRbg); err != nil {
-			return ctrl.Result{}, err
-		}
-	} else {
-		logger.V(1).Info("No need to update for old status  and new status , because it's deepequal", "oldStatus", oldStatus, "newStatus", newRbg.Status)
+	// update rbg status
+	rbgApplyConfig := utils.RoleBasedGroup(rbg.Name, rbg.Namespace, rbg.Kind, rbg.APIVersion).
+		WithStatus(utils.RbgStatus().WithRoleStatuses(roleStatuses...))
+
+	if err := utils.PatchObjectApplyConfiguration(ctx, r.client, rbgApplyConfig, utils.PatchStatus); err != nil {
+		r.recorder.Eventf(rbg, corev1.EventTypeWarning, "Update role status error",
+			"Failed to update status for %s: %v", rbg.Name, err)
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
-}
-
-func makeCondition(conditionType workloadsv1alpha1.RoleBasedGroupConditionType) metav1.Condition {
-	var condtype, reason, message string
-	switch conditionType {
-	case workloadsv1alpha1.RoleBasedGroupAvailable:
-		condtype = string(workloadsv1alpha1.RoleBasedGroupAvailable)
-		reason = "AllRolesReady"
-		message = "All replicas are ready"
-	case workloadsv1alpha1.RoleBasedGroupUpdateInProgress:
-		condtype = string(workloadsv1alpha1.RoleBasedGroupUpdateInProgress)
-		reason = RolesUpdating
-		message = "Rolling Upgrade is in progress"
-	default:
-		condtype = string(workloadsv1alpha1.RoleBasedGroupProgressing)
-		reason = RolesProgressing
-		message = "Replicas are progressing"
-	}
-
-	condition := metav1.Condition{
-		Type:               condtype,
-		Status:             metav1.ConditionStatus(corev1.ConditionTrue),
-		LastTransitionTime: metav1.Now(),
-		Reason:             reason,
-		Message:            message,
-	}
-	return condition
 }
 
 // SetupWithManager sets up the controller with the Manager.

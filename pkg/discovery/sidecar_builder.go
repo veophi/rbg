@@ -15,25 +15,24 @@ const (
 )
 
 type SidecarBuilder struct {
-	rbg       *workloadsv1alpha.RoleBasedGroup
-	roleIndex int32
-	roleName  string
+	rbg  *workloadsv1alpha.RoleBasedGroup
+	role *workloadsv1alpha.RoleSpec
 }
 
-func NewSidecarBuilder(rbg *workloadsv1alpha.RoleBasedGroup, roleName string) *SidecarBuilder {
+func NewSidecarBuilder(rbg *workloadsv1alpha.RoleBasedGroup, role *workloadsv1alpha.RoleSpec) *SidecarBuilder {
 	return &SidecarBuilder{
-		rbg:      rbg,
-		roleName: roleName,
+		rbg:  rbg,
+		role: role,
 	}
 }
 
-func (builder *SidecarBuilder) Build(pod *v1.Pod) error {
+func (builder *SidecarBuilder) Build(podSpec *v1.PodTemplateSpec) error {
 
 	var curRole workloadsv1alpha.RoleSpec
 	found := false
 
 	for _, role := range builder.rbg.Spec.Roles {
-		if role.Name == builder.roleName {
+		if role.Name == builder.role.Name {
 			curRole = role
 			found = true
 			break
@@ -75,7 +74,7 @@ func (builder *SidecarBuilder) Build(pod *v1.Pod) error {
 
 	c.Env = append(c.Env, curRole.RuntimeEngine.Env...)
 
-	pod.Spec.Containers = append(pod.Spec.Containers, *c)
+	podSpec.Spec.Containers = append(podSpec.Spec.Containers, *c)
 
 	// 2. add volume & volumeMount
 	if curRole.RuntimeEngine.MountGroupConfig {
@@ -86,7 +85,7 @@ func (builder *SidecarBuilder) Build(pod *v1.Pod) error {
 				EmptyDir: &v1.EmptyDirVolumeSource{},
 			},
 		}
-		pod.Spec.Volumes = append(pod.Spec.Volumes, configVolume)
+		podSpec.Spec.Volumes = append(podSpec.Spec.Volumes, configVolume)
 
 		// volume mount
 		mountPath := RuntimeGroupConfigMountPath
@@ -98,8 +97,8 @@ func (builder *SidecarBuilder) Build(pod *v1.Pod) error {
 			MountPath: mountPath,
 		}
 
-		for i := range pod.Spec.Containers {
-			pod.Spec.Containers[i].VolumeMounts = append(pod.Spec.Containers[i].VolumeMounts, configVolumeMount)
+		for i := range podSpec.Spec.Containers {
+			podSpec.Spec.Containers[i].VolumeMounts = append(podSpec.Spec.Containers[i].VolumeMounts, configVolumeMount)
 		}
 	}
 

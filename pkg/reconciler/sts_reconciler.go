@@ -2,18 +2,15 @@ package reconciler
 
 import (
 	"context"
-	"fmt"
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	appsapplyv1 "k8s.io/client-go/applyconfigurations/apps/v1"
+	coreapplyv1 "k8s.io/client-go/applyconfigurations/core/v1"
+	metaapplyv1 "k8s.io/client-go/applyconfigurations/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
-	"sigs.k8s.io/rbgs/pkg/discovery"
 	"sigs.k8s.io/rbgs/pkg/utils"
 )
 
@@ -35,144 +32,98 @@ func (r *StatefulSetReconciler) Reconciler(ctx context.Context, rbg *workloadsv1
 	logger := log.FromContext(ctx)
 	logger.Info("start to reconciler sts workload")
 
-	sts, err := r.buildSts(ctx, rbg, role)
+	stsApplyConfig, err := r.constructStatefulSetApplyConfiguration(ctx, rbg, role)
 	if err != nil {
+		logger.Error(err, "Failed to construct statefulset apply configuration")
 		return err
 	}
-	if err := utils.CreateOrUpdate(ctx, r.client, sts); err != nil {
+	if err := utils.PatchObjectApplyConfiguration(ctx, r.client, stsApplyConfig, utils.PatchSpec); err != nil {
+		logger.Error(err, "Failed to patch statefulset apply configuration")
 		return err
 	}
 
-	svc, err := r.buildHeadlessSvc(ctx, rbg, role)
+	svcApplyConfig, err := r.constructServiceApplyConfiguration(ctx, rbg, role)
 	if err != nil {
 		return err
 	}
 
-	return utils.CreateOrUpdate(ctx, r.client, svc)
+	return utils.PatchObjectApplyConfiguration(ctx, r.client, svcApplyConfig, utils.PatchSpec)
 }
 
-func (r *StatefulSetReconciler) buildSts(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) (obj client.Object, err error) {
-	logger := log.FromContext(ctx)
-	logger.Info("start to build sts")
+func (r *StatefulSetReconciler) constructStatefulSetApplyConfiguration(
+	ctx context.Context,
+	rbg *workloadsv1alpha1.RoleBasedGroup,
+	role *workloadsv1alpha1.RoleSpec,
+) (*appsapplyv1.StatefulSetApplyConfiguration, error) {
 
-	// 1. 尝试获取现有 StatefulSet
-	sts := &appsv1.StatefulSet{}
-	err = r.client.Get(ctx, client.ObjectKey{
-		Name:      fmt.Sprintf("%s-%s", rbg.Name, role.Name),
-		Namespace: rbg.Namespace,
-	}, sts)
-
-	if err != nil && !apierrors.IsNotFound(err) {
-		return nil, fmt.Errorf("failed to get existing StatefulSet: %w", err)
-	}
-
-	// 2. 创建基础 StatefulSet
-	if apierrors.IsNotFound(err) {
-		sts = &appsv1.StatefulSet{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:        fmt.Sprintf("%s-%s", rbg.Name, role.Name),
-				Namespace:   rbg.Namespace,
-				Labels:      rbg.GetCommonLabelsFromRole(role),
-				Annotations: rbg.GetCommonAnnotationsFromRole(role),
-			},
-			Spec: appsv1.StatefulSetSpec{
-				ServiceName: fmt.Sprintf("%s-%s", rbg.Name, role.Name),
-				Replicas:    role.Replicas,
-				Selector: &metav1.LabelSelector{
-					MatchLabels: rbg.GetCommonLabelsFromRole(role),
-				},
-			},
-		}
-
-		template := role.Template.DeepCopy()
-		if template.ObjectMeta.Labels == nil {
-			template.ObjectMeta.Labels = make(map[string]string)
-		}
-		if template.ObjectMeta.Annotations == nil {
-			template.ObjectMeta.Annotations = make(map[string]string)
-		}
-		sts.Spec.Template = *template
-	}
-
-	utils.MergeMap(sts.Spec.Template.ObjectMeta.Labels, rbg.GetCommonLabelsFromRole(role))
-	utils.MergeMap(sts.Spec.Template.ObjectMeta.Annotations, rbg.GetCommonAnnotationsFromRole(role))
-
-	// 3. 注入配置
-	injector := discovery.NewDefaultInjector(r.scheme, r.client)
-	dummyPod := &corev1.Pod{
-		ObjectMeta: *sts.Spec.Template.ObjectMeta.DeepCopy(),
-		Spec:       *sts.Spec.Template.Spec.DeepCopy(),
-	}
-
-	if err := injector.InjectConfig(ctx, dummyPod, rbg, role.Name, -1); err != nil {
-		return nil, fmt.Errorf("failed to inject config: %w", err)
-	}
-
-	// 3.1 注入环境变量
-	if err := injector.InjectEnvVars(ctx, dummyPod, rbg, role.Name, -1); err != nil {
-		return nil, fmt.Errorf("failed to inject env vars: %w", err)
-	}
-
-	// 3.2. 注入sidecar
-	if err := injector.InjectSidecar(ctx, dummyPod, rbg, role.Name, -1); err != nil {
-		return nil, fmt.Errorf("failed to inject sidecar: %w", err)
-	}
-
-	// 4. 回写修改后的模板
-	sts.Spec.Template.ObjectMeta = dummyPod.ObjectMeta
-	sts.Spec.Template.Spec = dummyPod.Spec
-
-	// 5. 设置 OwnerReference
-	if err := controllerutil.SetControllerReference(rbg, sts, r.scheme); err != nil {
+	podReconciler := NewPodReconciler(r.scheme, r.client)
+	podTemplateApplyConfiguration, err := podReconciler.ConstructPodTemplateSpecApplyConfiguration(ctx, rbg, role)
+	if err != nil {
 		return nil, err
 	}
 
-	logger.V(1).Info("Build Statefulset", "statefulset", utils.PrettyJson(sts))
-
-	return sts, nil
+	// construct statefulset apply configuration
+	statefulSetConfig := appsapplyv1.StatefulSet(rbg.GetWorkloadName(role), rbg.Namespace).
+		WithSpec(appsapplyv1.StatefulSetSpec().
+			WithServiceName(rbg.GetWorkloadName(role)).
+			WithReplicas(*role.Replicas).
+			WithTemplate(podTemplateApplyConfiguration).
+			WithSelector(metaapplyv1.LabelSelector().
+				WithMatchLabels(rbg.GetCommonLabelsFromRole(role)))).
+		WithAnnotations(rbg.GetCommonAnnotationsFromRole(role)).
+		WithLabels(rbg.GetCommonLabelsFromRole(role)).
+		WithOwnerReferences(metaapplyv1.OwnerReference().
+			WithAPIVersion(rbg.APIVersion).
+			WithKind(rbg.Kind).
+			WithName(rbg.Name).
+			WithUID(rbg.GetUID()).
+			WithBlockOwnerDeletion(true).
+			WithController(true),
+		)
+	return statefulSetConfig, nil
 }
 
-func (r *StatefulSetReconciler) buildHeadlessSvc(
+func (r *StatefulSetReconciler) constructServiceApplyConfiguration(
 	ctx context.Context,
 	rbg *workloadsv1alpha1.RoleBasedGroup,
-	role *workloadsv1alpha1.RoleSpec) (obj client.Object, err error) {
-	logger := log.FromContext(ctx)
-	logger.V(1).Info("start to build sts headless service")
-
-	// Generate Service name (same as StatefulSet)
-	svcName := fmt.Sprintf("%s-%s", rbg.Name, role.Name)
-
-	service := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        svcName,
-			Namespace:   rbg.Namespace,
-			Labels:      rbg.GetCommonLabelsFromRole(role),
-			Annotations: rbg.GetCommonAnnotationsFromRole(role),
-		},
-		Spec: corev1.ServiceSpec{
-			ClusterIP: "None", // defines service as headless
-			Selector: map[string]string{workloadsv1alpha1.SetNameLabelKey: rbg.Name,
-				workloadsv1alpha1.SetRoleLabelKey: role.Name},
-			PublishNotReadyAddresses: true,
-		},
+	role *workloadsv1alpha1.RoleSpec,
+) (*coreapplyv1.ServiceApplyConfiguration, error) {
+	selectMap := map[string]string{
+		workloadsv1alpha1.SetNameLabelKey: rbg.Name,
+		workloadsv1alpha1.SetRoleLabelKey: role.Name,
 	}
-
-	err = controllerutil.SetControllerReference(rbg, service, r.scheme)
-	if err != nil {
-		return
-	}
-
-	return service, nil
+	serviceConfig := coreapplyv1.Service(rbg.GetWorkloadName(role), rbg.Namespace).
+		WithSpec(coreapplyv1.ServiceSpec().
+			WithClusterIP("None").
+			WithSelector(selectMap).
+			WithPublishNotReadyAddresses(true)).
+		WithLabels(rbg.GetCommonLabelsFromRole(role)).
+		WithAnnotations(rbg.GetCommonAnnotationsFromRole(role)).
+		WithOwnerReferences(metaapplyv1.OwnerReference().
+			WithAPIVersion(rbg.APIVersion).
+			WithKind(rbg.Kind).
+			WithName(rbg.Name).
+			WithUID(rbg.GetUID()).
+			WithBlockOwnerDeletion(true).
+			WithController(true),
+		)
+	return serviceConfig, nil
 }
 
-func (r *StatefulSetReconciler) UpdateStatus(ctx context.Context, client client.Client, rbg *workloadsv1alpha1.RoleBasedGroup, newRbg *workloadsv1alpha1.RoleBasedGroup, roleName string) (bool, error) {
-	name := fmt.Sprintf("%s-%s", rbg.Name, roleName)
+func (r *StatefulSetReconciler) ConstructRoleStatus(
+	ctx context.Context,
+	rbg *workloadsv1alpha1.RoleBasedGroup,
+	role *workloadsv1alpha1.RoleSpec,
+) (workloadsv1alpha1.RoleStatus, error) {
 	sts := &appsv1.StatefulSet{}
-	if err := client.Get(ctx, types.NamespacedName{Name: name, Namespace: rbg.Namespace}, sts); err != nil {
-		return false, err
+	if err := r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, sts); err != nil {
+		return workloadsv1alpha1.RoleStatus{}, err
 	}
-
-	return utils.UpdateRoleReplicas(newRbg, roleName, sts.Spec.Replicas, sts.Status.ReadyReplicas), nil
+	return workloadsv1alpha1.RoleStatus{
+		Name:          role.Name,
+		Replicas:      *sts.Spec.Replicas,
+		ReadyReplicas: sts.Status.ReadyReplicas,
+	}, nil
 }
 
 func (r *StatefulSetReconciler) GetWorkloadType() string {

@@ -8,13 +8,12 @@ import (
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 )
 
-type EnvGenerator struct {
-	RBG       *workloadsv1alpha1.RoleBasedGroup
-	RoleName  string
-	RoleIndex int32
+type EnvBuilder struct {
+	rbg  *workloadsv1alpha1.RoleBasedGroup
+	role *workloadsv1alpha1.RoleSpec
 }
 
-func (g *EnvGenerator) Generate() []corev1.EnvVar {
+func (g *EnvBuilder) Build() []corev1.EnvVar {
 	envMap := make(map[string]corev1.EnvVar)
 
 	for _, env := range g.buildLocalRoleVars() {
@@ -39,16 +38,16 @@ func (g *EnvGenerator) Generate() []corev1.EnvVar {
 	return envVars
 }
 
-func (g *EnvGenerator) buildRoleSizeVar() corev1.EnvVar {
+func (g *EnvBuilder) buildRoleSizeVar() corev1.EnvVar {
 	return corev1.EnvVar{
-		Name:  fmt.Sprintf("ROLES_%s_SIZE", strings.ToUpper(g.RoleName)),
-		Value: fmt.Sprintf("%d", *g.RBG.GetRole(g.RoleName).Replicas),
+		Name:  fmt.Sprintf("ROLES_%s_SIZE", strings.ToUpper(g.role.Name)),
+		Value: fmt.Sprintf("%d", *g.role.Replicas),
 	}
 }
 
-func (g *EnvGenerator) buildGroupSizeVar() corev1.EnvVar {
+func (g *EnvBuilder) buildGroupSizeVar() corev1.EnvVar {
 	groupSize := 0
-	for _, role := range g.RBG.Spec.Roles {
+	for _, role := range g.rbg.Spec.Roles {
 		groupSize += int(*role.Replicas)
 	}
 	return corev1.EnvVar{
@@ -57,10 +56,10 @@ func (g *EnvGenerator) buildGroupSizeVar() corev1.EnvVar {
 	}
 }
 
-func (g *EnvGenerator) buildRoleAddressVars() []corev1.EnvVar {
+func (g *EnvBuilder) buildRoleAddressVars() []corev1.EnvVar {
 	var envVars []corev1.EnvVar
-	for _, role := range g.RBG.Spec.Roles {
-		serviceName := fmt.Sprintf("%s-%s", g.RBG.Name, role.Name)
+	for _, role := range g.rbg.Spec.Roles {
+		serviceName := fmt.Sprintf("%s-%s", g.rbg.Name, role.Name)
 		for i := 0; i < int(*role.Replicas); i++ {
 			basePrefix := fmt.Sprintf("ROLES_%s_%d", strings.ToUpper(role.Name), i)
 
@@ -94,27 +93,31 @@ func (g *EnvGenerator) buildRoleAddressVars() []corev1.EnvVar {
 	return envVars
 }
 
-func (g *EnvGenerator) buildLocalRoleVars() (envVars []corev1.EnvVar) {
+func (g *EnvBuilder) buildLocalRoleVars() []corev1.EnvVar {
+
 	// Inject environment variables for service discovery
-	envVars = []corev1.EnvVar{
+	envVars := []corev1.EnvVar{
 		{
 			Name:  "GROUP_NAME",
-			Value: g.RBG.Name,
+			Value: g.rbg.Name,
 		},
 		{
 			Name:  "ROLE_NAME",
-			Value: g.RoleName,
-		},
-		// for statefulset
-		{
-			Name: "ROLE_INDEX",
-			ValueFrom: &corev1.EnvVarSource{
-				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath: "metadata.labels['apps.kubernetes.io/pod-index']",
-				},
-			},
+			Value: g.role.Name,
 		},
 	}
 
-	return
+	if g.role.Workload.Kind == "StatefulSet" {
+		envVars = append(envVars,
+			corev1.EnvVar{
+				Name: "ROLE_INDEX",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "metadata.labels['apps.kubernetes.io/pod-index']",
+					},
+				},
+			})
+	}
+
+	return envVars
 }
