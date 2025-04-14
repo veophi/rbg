@@ -10,13 +10,7 @@ import (
 
 type WorkloadReconciler interface {
 	Reconciler(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) error
-	UpdateStatus(
-		ctx context.Context,
-		client client.Client,
-		rbg *workloadsv1alpha1.RoleBasedGroup,
-		newRbg *workloadsv1alpha1.RoleBasedGroup,
-		roleName string,
-	) (bool, error)
+	ConstructRoleStatus(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) (workloadsv1alpha1.RoleStatus, error)
 	GetWorkloadType() string
 }
 

@@ -11,10 +11,8 @@ import (
 )
 
 type ConfigBuilder struct {
-	RBG       *workloadsv1alpha1.RoleBasedGroup
-	GroupName string
-	RoleName  string
-	RoleIndex int32
+	rbg  *workloadsv1alpha1.RoleBasedGroup
+	role *workloadsv1alpha1.RoleSpec
 }
 
 type ClusterConfig struct {
@@ -43,8 +41,8 @@ type Instance struct {
 func (b *ConfigBuilder) Build() ([]byte, error) {
 	config := ClusterConfig{
 		Group: GroupInfo{
-			Name:  b.GroupName,
-			Size:  len(b.RBG.Spec.Roles),
+			Name:  b.rbg.Name,
+			Size:  len(b.rbg.Spec.Roles),
 			Roles: b.getRoleNames(),
 		},
 		Roles: b.buildRolesInfo(),
@@ -53,8 +51,8 @@ func (b *ConfigBuilder) Build() ([]byte, error) {
 }
 
 func (b *ConfigBuilder) getRoleNames() []string {
-	names := make([]string, 0, len(b.RBG.Spec.Roles))
-	for _, r := range b.RBG.Spec.Roles {
+	names := make([]string, 0, len(b.rbg.Spec.Roles))
+	for _, r := range b.rbg.Spec.Roles {
 		names = append(names, r.Name)
 	}
 	return names
@@ -62,18 +60,18 @@ func (b *ConfigBuilder) getRoleNames() []string {
 
 func (b *ConfigBuilder) buildRolesInfo() RolesInfo {
 	roles := make(RolesInfo)
-	for _, role := range b.RBG.Spec.Roles {
+	for _, role := range b.rbg.Spec.Roles {
 		roles[role.Name] = RoleInstances{
 			Size:      int(*role.Replicas),
-			Instances: b.buildInstances(role),
+			Instances: b.buildInstances(&role),
 		}
 	}
 	return roles
 }
 
-func (b *ConfigBuilder) buildInstances(role workloadsv1alpha1.RoleSpec) []Instance {
+func (b *ConfigBuilder) buildInstances(role *workloadsv1alpha1.RoleSpec) []Instance {
 	instances := make([]Instance, 0, *role.Replicas)
-	serviceName := fmt.Sprintf("%s-%s", b.GroupName, role.Name)
+	serviceName := b.rbg.GetWorkloadName(role)
 
 	for i := 0; i < int(*role.Replicas); i++ {
 		instance := Instance{

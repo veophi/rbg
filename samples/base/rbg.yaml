@@ -7,9 +7,7 @@ spec:
   # Leader 节点（通常单副本）
   - name: leader
     replicas: 1  # 明确指定单副本
-    workload:
-      apiVersion: apps/v1
-      kind: StatefulSet  # 显式声明类型
+    workload: {}  # 使用默认的StatefulSet配置
     template:
       spec:
         containers:
@@ -22,7 +20,9 @@ spec:
   - name: worker
     replicas: 3  # 默认使用1副本，这里显式指定3个
     dependencies: ["leader"]  # 声明依赖关系
-    workload: {}  # 使用默认的StatefulSet配置
+    workload:
+      apiVersion: apps/v1
+      kind: Deployment  # 显式声明类型
     template:
       spec:
         containers:

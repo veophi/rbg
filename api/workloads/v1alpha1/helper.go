@@ -19,12 +19,6 @@ func (rbg *RoleBasedGroup) GetCommonAnnotationsFromRole(role *RoleSpec) map[stri
 	}
 }
 
-func (rbg *RoleBasedGroup) GetRole(name string) (role *RoleSpec) {
-	// return map[string]string{}
-	for _, role := range rbg.Spec.Roles {
-		if role.Name == name {
-			return &role
-		}
-	}
-	return
+func (rbg *RoleBasedGroup) GetWorkloadName(role *RoleSpec) string {
+	return fmt.Sprintf("%s-%s", rbg.Name, role.Name)
 }
