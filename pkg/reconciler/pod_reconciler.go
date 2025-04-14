@@ -33,11 +33,12 @@ func (r *PodReconciler) ConstructPodTemplateSpecApplyConfiguration(
 	if err := injector.InjectConfig(ctx, &podTemplateSpec, rbg, role); err != nil {
 		return nil, fmt.Errorf("failed to inject config: %w", err)
 	}
-	if err := injector.InjectEnv(ctx, &podTemplateSpec, rbg, role); err != nil {
-		return nil, fmt.Errorf("failed to inject env vars: %w", err)
-	}
+	// sidecar也需要rbg相关的env，先注入sidecar
 	if err := injector.InjectSidecar(ctx, &podTemplateSpec, rbg, role); err != nil {
 		return nil, fmt.Errorf("failed to inject sidecar: %w", err)
+	}
+	if err := injector.InjectEnv(ctx, &podTemplateSpec, rbg, role); err != nil {
+		return nil, fmt.Errorf("failed to inject env vars: %w", err)
 	}
 
 	// construct pod template spec configuration

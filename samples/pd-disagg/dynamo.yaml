@@ -6,9 +6,6 @@ spec:
   roles:
     - name: processor
       replicas: 1
-      #      workload:
-      #        apiVersion: apps/v1
-      #        kind: Deployment
       template:
         spec:
           volumes:
@@ -64,9 +61,6 @@ spec:
 
     - name: prefill
       replicas: 2
-      #      workload:
-      #        apiVersion: apps/v1
-      #        kind: Deployment
       template:
         spec:
           volumes:
@@ -126,9 +120,6 @@ spec:
 
     - name: decoder
       replicas: 1
-#      workload:
-#        apiVersion: apps/v1
-#        kind: Deployment
       template:
         spec:
           volumes:
@@ -143,7 +134,7 @@ spec:
             - command:
                 - sh
                 - -c
-                - "cd /workspace/examples/llm; dynamo serve graphs.disagg-decode:VllmWorker -f configs/disagg-decode.yaml"
+                - "cd /workspace/examples/llm; dynamo serve graphs.disagg-decode:VllmWorker -f configs/disagg-decode-route.yaml"
               env:
                 - name: DYNAMO_NAME
                   value: dynamo

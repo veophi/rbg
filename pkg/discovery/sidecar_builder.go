@@ -9,7 +9,7 @@ import (
 const (
 	RuntimeContainerName = "patio-runtime"
 	// TODO 替换为正式版本镜像
-	RuntimeContainerImage       = "registry.ap-southeast-1.aliyuncs.com/zibai-test/patio-runtime:v1"
+	RuntimeContainerImage       = "registry.ap-southeast-1.aliyuncs.com/zibai-test/patio-runtime:v0.1.0"
 	RuntimeGroupConfigFileName  = "patio-group-config"
 	RuntimeGroupConfigMountPath = "/etc/patio"
 )
