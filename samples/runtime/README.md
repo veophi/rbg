@@ -19,7 +19,7 @@ curl http://localhost:8080/metrics
 
 ## 组内拓扑发现
 ```bash
-kubectl apply -f samples/pd-disagg/LingJun.yaml
+kubectl apply -f samples/pd-disagg/llingjun.yaml
 ```
 查看组内拓扑结构
 ```bash
