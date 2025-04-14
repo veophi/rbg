@@ -1,7 +1,5 @@
 # The RoleBasedGroupSet API 
 
-RoleBasedGroupSet: An API for managing 
-
 A Kubernetes operator for orchestrating distributed stateful services with multi-role collaboration and automated service discovery.
 
 ## 📖 Overview
