@@ -1,6 +1,9 @@
 package v1alpha1
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 func (rbg *RoleBasedGroup) GetCommonLabelsFromRole(role *RoleSpec) map[string]string {
 	return map[string]string{
@@ -21,4 +24,17 @@ func (rbg *RoleBasedGroup) GetCommonAnnotationsFromRole(role *RoleSpec) map[stri
 
 func (rbg *RoleBasedGroup) GetWorkloadName(role *RoleSpec) string {
 	return fmt.Sprintf("%s-%s", rbg.Name, role.Name)
+}
+
+func (rbg *RoleBasedGroup) GetRole(roleName string) (*RoleSpec, error) {
+	if roleName == "" {
+		return nil, errors.New("roleName cannot be empty")
+	}
+
+	for i := range rbg.Spec.Roles {
+		if rbg.Spec.Roles[i].Name == roleName {
+			return &rbg.Spec.Roles[i], nil
+		}
+	}
+	return nil, fmt.Errorf("role %q not found", roleName)
 }

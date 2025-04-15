@@ -83,6 +83,44 @@ func RunRbgControllerTestCases(f *framework.Framework) {
 				}
 				rbg.Spec.Roles = append(rbg.Spec.Roles, deployRole)
 				err := f.Client.Create(f.Ctx, rbg)
+				gomega.Expect(err).To(gomega.BeNil())
+
+				err = f.ExpectRbgEqual(rbg)
+				gomega.Expect(err).To(gomega.BeNil())
+			})
+		})
+
+		ginkgo.Context("rbg with dependency", func() {
+			ginkgo.It("rbg with dependency", func() {
+				rbg := baseRbg.DeepCopy()
+				role := v1alpha1.RoleSpec{
+					Name: "role-2",
+					Workload: v1alpha1.WorkloadSpec{
+						APIVersion: "apps/v1",
+						Kind:       "StatefulSet",
+					},
+					Dependencies: []string{"role-1"},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "pod-2",
+							Namespace: framework.DefaultNamespace,
+							Labels: map[string]string{
+								"app": "pod-2",
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "container-2",
+									Image: framework.DefaultImage,
+								},
+							},
+						},
+					},
+				}
+				rbg.Spec.Roles = append(rbg.Spec.Roles, role)
+				err := f.Client.Create(f.Ctx, rbg)
+				gomega.Expect(err).To(gomega.BeNil())
 
 				err = f.ExpectRbgEqual(rbg)
 				gomega.Expect(err).To(gomega.BeNil())

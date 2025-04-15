@@ -89,3 +89,11 @@ func (r *DeploymentReconciler) ConstructRoleStatus(
 func (r *DeploymentReconciler) GetWorkloadType() string {
 	return "apps/v1/Deployment"
 }
+
+func (r *DeploymentReconciler) CheckWorkloadReady(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) (bool, error) {
+	deploy := &appsv1.Deployment{}
+	if err := r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, deploy); err != nil {
+		return false, err
+	}
+	return deploy.Status.ReadyReplicas == *deploy.Spec.Replicas, nil
+}

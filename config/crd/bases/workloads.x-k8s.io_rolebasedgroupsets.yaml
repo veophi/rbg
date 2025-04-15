@@ -61,7 +61,7 @@ spec:
                         the group
                       properties:
                         dependencies:
-                          description: Number of replicas for this role
+                          description: Dependencies of the role
                           items:
                             type: string
                           type: array

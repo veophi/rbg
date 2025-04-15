@@ -129,3 +129,11 @@ func (r *StatefulSetReconciler) ConstructRoleStatus(
 func (r *StatefulSetReconciler) GetWorkloadType() string {
 	return "apps/v1/StatefulSet"
 }
+
+func (r *StatefulSetReconciler) CheckWorkloadReady(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) (bool, error) {
+	sts := &appsv1.StatefulSet{}
+	if err := r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, sts); err != nil {
+		return false, err
+	}
+	return sts.Status.ReadyReplicas == *sts.Spec.Replicas, nil
+}
