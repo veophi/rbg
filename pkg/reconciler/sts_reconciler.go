@@ -68,6 +68,7 @@ func (r *StatefulSetReconciler) constructStatefulSetApplyConfiguration(
 			WithServiceName(rbg.GetWorkloadName(role)).
 			WithReplicas(*role.Replicas).
 			WithTemplate(podTemplateApplyConfiguration).
+			WithPodManagementPolicy(appsv1.ParallelPodManagement).
 			WithSelector(metaapplyv1.LabelSelector().
 				WithMatchLabels(rbg.GetCommonLabelsFromRole(role)))).
 		WithAnnotations(rbg.GetCommonAnnotationsFromRole(role)).
