@@ -43,7 +43,7 @@ type RoleSpec struct {
 	// +kubebuilder:default=1
 	Replicas *int32 `json:"replicas"`
 
-	// Number of replicas for this role
+	// Dependencies of the role
 	// +optional
 	Dependencies []string `json:"dependencies,omitempty"`
 

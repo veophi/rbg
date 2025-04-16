@@ -75,8 +75,8 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	logger.Info("Start reconciling")
 
 	// Process roles in dependency order
-	dependencyManager := dependency.NewDependencyManager()
-	sortedRoles, err := dependencyManager.SortRoles(rbg)
+	dependencyManager := dependency.NewDefaultDependencyManager(r.scheme, r.client)
+	sortedRoles, err := dependencyManager.SortRoles(ctx, rbg)
 	if err != nil {
 		r.recorder.Event(rbg, corev1.EventTypeWarning, "InvalidDependency", err.Error())
 		return ctrl.Result{}, err
@@ -86,7 +86,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	var roleStatuses []workloadsv1alpha1.RoleStatus
 	for _, role := range sortedRoles {
 		// Check dependencies first
-		if ready, err := dependencyManager.CheckDependencies(rbg, role); !ready || err != nil {
+		if ready, err := dependencyManager.CheckDependencyReady(ctx, rbg, role); !ready || err != nil {
 			if err != nil {
 				return ctrl.Result{}, err
 			}
