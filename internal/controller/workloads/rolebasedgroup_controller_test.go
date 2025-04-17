@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/rbgs/pkg/utils"
@@ -43,10 +42,7 @@ func TestRoleBasedGroupReconciler_CheckCrdExists(t *testing.T) {
 	targetCRDName := "rolebasedgroups.workloads.x-k8s.io"
 
 	type fields struct {
-		client    client.Client
 		apiReader client.Reader
-		scheme    *runtime.Scheme
-		recorder  record.EventRecorder
 	}
 
 	tests := []struct {
