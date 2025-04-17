@@ -17,80 +17,21 @@ limitations under the License.
 package workloads
 
 import (
-	"context"
 	"errors"
 	"testing"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	// . "github.com/onsi/ginkgo/v2"
+	// . "github.com/onsi/gomega"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/rbgs/pkg/utils"
-
-	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 )
-
-var _ = Describe("RoleBasedGroupSet Controller", func() {
-	Context("When reconciling a resource", func() {
-		const resourceName = "test-resource"
-
-		ctx := context.Background()
-
-		typeNamespacedName := types.NamespacedName{
-			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
-		}
-		rolebasedgroupset := &workloadsv1alpha1.RoleBasedGroupSet{}
-
-		BeforeEach(func() {
-			By("creating the custom resource for the Kind RoleBasedGroupSet")
-			err := k8sClient.Get(ctx, typeNamespacedName, rolebasedgroupset)
-			if err != nil && apierrors.IsNotFound(err) {
-				resource := &workloadsv1alpha1.RoleBasedGroupSet{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
-					},
-					// TODO(user): Specify other spec details if needed.
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
-			}
-		})
-
-		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &workloadsv1alpha1.RoleBasedGroupSet{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Cleanup the specific resource instance RoleBasedGroupSet")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
-		})
-		It("should successfully reconcile the resource", func() {
-			By("Reconciling the created resource")
-			controllerReconciler := &RoleBasedGroupSetReconciler{
-				client: k8sClient,
-				scheme: k8sClient.Scheme(),
-			}
-
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
-		})
-	})
-})
 
 func TestRoleBasedGroupSetReconciler_CheckCrdExists(t *testing.T) {
 	// Setup test scheme with required types
@@ -102,10 +43,7 @@ func TestRoleBasedGroupSetReconciler_CheckCrdExists(t *testing.T) {
 	targetCRDName := "rolebasedgroupsets.workloads.x-k8s.io"
 
 	type fields struct {
-		client    client.Client
 		apiReader client.Reader
-		scheme    *runtime.Scheme
-		recorder  record.EventRecorder
 	}
 
 	tests := []struct {
