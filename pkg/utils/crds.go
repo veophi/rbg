@@ -13,7 +13,7 @@ func CheckCrdExists(reader client.Reader, crdName string) error {
 	crd := &apiextensionsv1.CustomResourceDefinition{}
 	ctx := context.Background()
 	if err := reader.Get(ctx, client.ObjectKey{Name: crdName}, crd); err != nil {
-		return fmt.Errorf("CRD %s not found: %v", crdName, err)
+		return err
 	}
 
 	// Check Established status

@@ -164,5 +164,5 @@ func (r *RoleBasedGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // CheckCrdExists checks if the specified Custom Resource Definition (CRD) exists in the Kubernetes cluster.
 func (r *RoleBasedGroupReconciler) CheckCrdExists() error {
-	return utils.CheckCrdExists(r.apiReader, "rolebasedgroup.workloads.x-k8s.io")
+	return utils.CheckCrdExists(r.apiReader, "rolebasedgroups.workloads.x-k8s.io")
 }

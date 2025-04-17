@@ -19,6 +19,15 @@ rules:
   - rolebasedgroupsets
   verbs:
   - '*'
+- apiGroups: 
+  - "apiextensions.k8s.io"
+  resources: 
+  - "customresourcedefinitions"
+  verbs: 
+  - "get"
+  resourceNames: 
+  - "rolebasedgroupsets.workloads.x-k8s.io"
+  - "rolebasedgroups.workloads.x-k8s.io"
 - apiGroups:
   - workloads.x-k8s.io
   resources:
