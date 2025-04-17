@@ -19,9 +19,10 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"go.uber.org/zap/zapcore"
 	"os"
 	"path/filepath"
+
+	"go.uber.org/zap/zapcore"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -219,12 +220,22 @@ func main() {
 	}
 
 	rbgReconciler := workloadscontroller.NewRoleBasedGroupReconciler(mgr)
+	if err = rbgReconciler.CheckCrdExists(); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "RoleBasedGroup")
+		os.Exit(1)
+	}
+
 	if err = rbgReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RoleBasedGroup")
 		os.Exit(1)
 	}
 
 	rbgsReconciler := workloadscontroller.NewRoleBasedGroupSetReconciler(mgr)
+	if err = rbgsReconciler.CheckCrdExists(); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "RoleBasedGroupSet")
+		os.Exit(1)
+	}
+
 	if err = rbgsReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RoleBasedGroupSet")
 		os.Exit(1)

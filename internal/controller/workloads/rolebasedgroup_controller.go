@@ -18,13 +18,14 @@ package workloads
 
 import (
 	"context"
+	"reflect"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -47,16 +48,18 @@ const (
 
 // RoleBasedGroupReconciler reconciles a RoleBasedGroup object
 type RoleBasedGroupReconciler struct {
-	client   client.Client
-	scheme   *runtime.Scheme
-	recorder record.EventRecorder
+	client    client.Client
+	apiReader client.Reader
+	scheme    *runtime.Scheme
+	recorder  record.EventRecorder
 }
 
 func NewRoleBasedGroupReconciler(mgr ctrl.Manager) *RoleBasedGroupReconciler {
 	return &RoleBasedGroupReconciler{
-		client:   mgr.GetClient(),
-		scheme:   mgr.GetScheme(),
-		recorder: mgr.GetEventRecorderFor("RoleBasedGroup"),
+		client:    mgr.GetClient(),
+		apiReader: mgr.GetAPIReader(),
+		scheme:    mgr.GetScheme(),
+		recorder:  mgr.GetEventRecorderFor("RoleBasedGroup"),
 	}
 }
 
@@ -157,4 +160,9 @@ func (r *RoleBasedGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Named("workloads-rolebasedgroup").
 		WithEventFilter(pred).
 		Complete(r)
+}
+
+// CheckCrdExists checks if the specified Custom Resource Definition (CRD) exists in the Kubernetes cluster.
+func (r *RoleBasedGroupReconciler) CheckCrdExists() error {
+	return utils.CheckCrdExists(r.apiReader, "rolebasedgroup.workloads.x-k8s.io")
 }

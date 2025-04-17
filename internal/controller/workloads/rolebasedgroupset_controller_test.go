@@ -18,14 +18,23 @@ package workloads
 
 import (
 	"context"
+	"errors"
+	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/rbgs/pkg/utils"
 
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 )
@@ -45,7 +54,7 @@ var _ = Describe("RoleBasedGroupSet Controller", func() {
 		BeforeEach(func() {
 			By("creating the custom resource for the Kind RoleBasedGroupSet")
 			err := k8sClient.Get(ctx, typeNamespacedName, rolebasedgroupset)
-			if err != nil && errors.IsNotFound(err) {
+			if err != nil && apierrors.IsNotFound(err) {
 				resource := &workloadsv1alpha1.RoleBasedGroupSet{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
@@ -82,3 +91,123 @@ var _ = Describe("RoleBasedGroupSet Controller", func() {
 		})
 	})
 })
+
+func TestRoleBasedGroupSetReconciler_CheckCrdExists(t *testing.T) {
+	// Setup test scheme with required types
+	testScheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(testScheme)
+	_ = apiextensionsv1.AddToScheme(testScheme)
+
+	// Target CRD name following Kubernetes naming convention
+	targetCRDName := "rolebasedgroupsets.workloads.x-k8s.io"
+
+	type fields struct {
+		client    client.Client
+		apiReader client.Reader
+		scheme    *runtime.Scheme
+		recorder  record.EventRecorder
+	}
+
+	tests := []struct {
+		name    string
+		fields  fields
+		wantErr bool
+	}{
+		{
+			name: "CRD exists and established",
+			fields: fields{
+				apiReader: fake.NewClientBuilder().
+					WithScheme(testScheme).
+					WithObjects(&apiextensionsv1.CustomResourceDefinition{
+						ObjectMeta: metav1.ObjectMeta{Name: targetCRDName},
+						Status: apiextensionsv1.CustomResourceDefinitionStatus{
+							Conditions: []apiextensionsv1.CustomResourceDefinitionCondition{
+								{
+									Type:   apiextensionsv1.Established,
+									Status: apiextensionsv1.ConditionTrue,
+								},
+							},
+						},
+					}).
+					Build(),
+			},
+			wantErr: false,
+		},
+		{
+			name: "CRD not found in cluster",
+			fields: fields{
+				apiReader: fake.NewClientBuilder().
+					WithScheme(testScheme).
+					Build(), // Empty client
+			},
+			wantErr: true,
+		},
+		{
+			name: "CRD exists but not established",
+			fields: fields{
+				apiReader: fake.NewClientBuilder().
+					WithScheme(testScheme).
+					WithObjects(&apiextensionsv1.CustomResourceDefinition{
+						ObjectMeta: metav1.ObjectMeta{Name: targetCRDName},
+						Status:     apiextensionsv1.CustomResourceDefinitionStatus{
+							// No established condition
+						},
+					}).
+					Build(),
+			},
+			wantErr: true,
+		},
+		{
+			name: "API server connection error",
+			fields: fields{
+				apiReader: utils.NewErrorInjectingClient(
+					errors.New("connection refused"), // Simulate API server downtime
+				),
+			},
+			wantErr: true,
+		},
+		{
+			name: "RBAC permission denied",
+			fields: fields{
+				apiReader: utils.NewErrorInjectingClient(
+					apierrors.NewForbidden(
+						schema.GroupResource{Group: "apiextensions.k8s.io", Resource: "customresourcedefinitions"},
+						targetCRDName,
+						errors.New("requires 'get' permission"),
+					),
+				),
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &RoleBasedGroupSetReconciler{
+				apiReader: tt.fields.apiReader, // Focus on API reader component
+			}
+
+			// Execute the check operation
+			err := r.CheckCrdExists()
+
+			// Validate error expectations
+			if (err != nil) != tt.wantErr {
+				t.Errorf("CheckCrdExists() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			// Additional error type assertions
+			if tt.wantErr {
+				switch tt.name {
+				case "RBAC permission denied":
+					if !apierrors.IsForbidden(err) {
+						t.Error("Expected Forbidden error not received")
+					}
+				case "CRD not found in cluster":
+					if !apierrors.IsNotFound(err) {
+						t.Error("Expected NotFound error not received")
+					}
+				}
+			}
+		})
+	}
+}
