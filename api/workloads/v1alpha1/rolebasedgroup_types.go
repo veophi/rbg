@@ -48,7 +48,6 @@ type RoleSpec struct {
 	Dependencies []string `json:"dependencies,omitempty"`
 
 	// Workload type specification
-	// +kubebuilder:default={apiVersion:"apps/v1", kind:"StatefulSet"}
 	// +optional
 	Workload WorkloadSpec `json:"workload,omitempty"`
 
@@ -65,7 +64,6 @@ type RoleSpec struct {
 
 type WorkloadSpec struct {
 	// +optional
-	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/v[0-9]+((alpha|beta)[0-9]+)?$`
 	// +kubebuilder:default="apps/v1"
 	APIVersion string `json:"apiVersion"`
 

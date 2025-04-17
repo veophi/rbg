@@ -7250,14 +7250,10 @@ spec:
                           type: object
                       type: object
                     workload:
-                      default:
-                        apiVersion: apps/v1
-                        kind: StatefulSet
                       description: Workload type specification
                       properties:
                         apiVersion:
                           default: apps/v1
-                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/v[0-9]+((alpha|beta)[0-9]+)?$
                           type: string
                         kind:
                           default: StatefulSet
