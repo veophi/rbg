@@ -19,6 +19,8 @@ package workloads
 import (
 	"context"
 	"fmt"
+	"sync"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -28,7 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
-	"sync"
+	"sigs.k8s.io/rbgs/pkg/utils"
 )
 
 const (
@@ -37,16 +39,18 @@ const (
 
 // RoleBasedGroupSetReconciler reconciles a RoleBasedGroupSet object
 type RoleBasedGroupSetReconciler struct {
-	client   client.Client
-	scheme   *runtime.Scheme
-	recorder record.EventRecorder
+	client    client.Client
+	apiReader client.Reader
+	scheme    *runtime.Scheme
+	recorder  record.EventRecorder
 }
 
 func NewRoleBasedGroupSetReconciler(mgr ctrl.Manager) *RoleBasedGroupSetReconciler {
 	return &RoleBasedGroupSetReconciler{
-		client:   mgr.GetClient(),
-		scheme:   mgr.GetScheme(),
-		recorder: mgr.GetEventRecorderFor("rbgset-controller"),
+		client:    mgr.GetClient(),
+		apiReader: mgr.GetAPIReader(),
+		scheme:    mgr.GetScheme(),
+		recorder:  mgr.GetEventRecorderFor("rbgset-controller"),
 	}
 }
 
@@ -125,10 +129,14 @@ func (r *RoleBasedGroupSetReconciler) createRBG(
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *RoleBasedGroupSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
-
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&workloadsv1alpha1.RoleBasedGroupSet{}).
 		Owns(&workloadsv1alpha1.RoleBasedGroup{}).
 		Named("workloads-rolebasedgroupset").
 		Complete(r)
+}
+
+// CheckCrdExists checks if the specified Custom Resource Definition (CRD) exists in the Kubernetes cluster.
+func (r *RoleBasedGroupSetReconciler) CheckCrdExists() error {
+	return utils.CheckCrdExists(r.apiReader, "rolebasedgroupsets.workloads.x-k8s.io")
 }

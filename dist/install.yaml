@@ -15039,6 +15039,15 @@ rules:
   verbs:
   - '*'
 - apiGroups:
+  - apiextensions.k8s.io
+  resourceNames:
+  - rolebasedgroupsets.workloads.x-k8s.io
+  - rolebasedgroups.workloads.x-k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+- apiGroups:
   - workloads.x-k8s.io
   resources:
   - rolebasedgroupsets/status
@@ -15300,7 +15309,7 @@ spec:
           periodSeconds: 10
         resources:
           limits:
-            cpu: 4
+            cpu: 4000m
             memory: 1280Mi
           requests:
             cpu: 10m
