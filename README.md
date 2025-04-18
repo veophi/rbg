@@ -1,6 +1,6 @@
-# The RoleBasedGroupSet API 
+# The RoleBasedGroup API 
 
-RoleBasedGroupSet: An API for for orchestrating distributed workload services with multi-role collaboration and automated service discovery.
+RoleBasedGroup: An API for for orchestrating distributed workload services with multi-role collaboration and automated service discovery.
 
 ## 📖 Overview
 
@@ -11,11 +11,10 @@ Traditional Kubernetes statefulset struggle with multi-role coordination in dist
 - Fragmented configuration management  
 
 ### 🧩 Key Features
-   **Multi-template Role Specification** - RoleBasedGroupSet models a distributed stateful workload as a group of K8s Workloads. This allows a user to easily specify different pod templates for different distinct groups of pods (e.g. a prefill, decode, scheduler, etc.), something which cannot be done by a single Statefulset.
-✨ **Multi-Role Startup Sequencing** - Define role dependencies a startup order for the ReplicatedJobs in a RoleBasedGroupSet. This enables support for patterns like the “leader-worker” paradigm, where the leader must be running before the workers should start up and connect to it. 
-🔍 **Auto Service Discovery** - applications discover peers via native DNS and pre-loaded YAML endpoints. Dynamic updates propagate through ConfigMap versioning without pod restarts. 
-⚡ **Elastic Scaling** - Support group/role-level scaling flexible capacity management. Scale entire groups for capacity bursts (`spec.replicas`), adjust role replicas for workload balance. Built on StatefulSet controllers, scaling maintains stable network identities and ordered deployment semantics. 
-📦 **Unified Configuration** - Dual injection via YAML and environment variables
+   **Multi-template Role Specification** - RoleBasedGroup models a distributed stateful workload as a group of K8s Workloads. This allows a user to easily specify different pod templates for different distinct groups of pods (e.g. a prefill, decode, scheduler, etc.), something which cannot be done by a single Statefulset.  
+   **Group/Role-Level Scaling** - Scale entire groups for capacity bursts (`spec.replicas`), adjust role replicas for workload balance. Built on StatefulSet controllers, scaling maintains stable network identities and ordered deployment semantics.  
+   **Multi-Role Startup Sequencing** - Define role dependencies a startup order for the ReplicatedJobs in a RoleBasedGroup. This enables support for patterns like the “leader-worker” paradigm, where the leader must be running before the workers should start up and connect to it.   
+   **Auto Service Discovery** - applications discover peers via native DNS and pre-loaded YAML endpoints. Dynamic updates propagate through ConfigMap versioning without pod restarts.   
 
 ## 🏗 Conceptual Diagram
 
