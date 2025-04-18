@@ -19,19 +19,16 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"os"
-	"path/filepath"
-
-	"go.uber.org/zap/zapcore"
-
-	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
-	// to ensure that exec-entrypoint and run can make use of them.
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
-
+	"fmt"
 	rawzap "go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"os"
+	"path/filepath"
+	goruntime "runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -39,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/rbgs/version"
 
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	workloadscontroller "sigs.k8s.io/rbgs/internal/controller/workloads"
@@ -52,13 +50,23 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(apiextv1.AddToScheme(scheme))
 
 	utilruntime.Must(workloadsv1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
+func printVersion() {
+	setupLog.Info(fmt.Sprintf("RoleBasedGroup Controller Version: %s, git commit: %s, build date: %s",
+		version.Version, version.GitCommit, version.BuildDate))
+	setupLog.Info(fmt.Sprintf("Go Version: %s", goruntime.Version()))
+	setupLog.Info(fmt.Sprintf("Go OS/Arch: %s/%s", goruntime.GOOS, goruntime.GOARCH))
+}
+
 // nolint:gocyclo
 func main() {
+	printVersion()
+
 	var metricsAddr string
 	var metricsCertPath, metricsCertName, metricsCertKey string
 	var webhookCertPath, webhookCertName, webhookCertKey string

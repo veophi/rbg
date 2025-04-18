@@ -1,0 +1,44 @@
+# Default values for rbgs-controller.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: registry-cn-hangzhou.ack.aliyuncs.com/dev/rbgs-controller
+  pullPolicy: IfNotPresent
+  tag: 608e44c5
+
+imagePullSecrets: {}
+
+podAnnotations: {}
+
+podSecurityContext: {}
+# fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+# runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 80
+
+resources:
+  limits:
+    cpu: 4000m
+    memory: 2Gi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
