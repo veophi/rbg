@@ -7,7 +7,7 @@ replicaCount: 1
 image:
   repository: registry-cn-hangzhou.ack.aliyuncs.com/dev/rbgs-controller
   pullPolicy: IfNotPresent
-  tag: 8790ffc6
+  tag: 608e44c5
 
 imagePullSecrets: {}
 
