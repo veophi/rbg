@@ -6,9 +6,9 @@ RoleBasedGroupSet: An API for for orchestrating distributed workload services wi
 
 ### Background
 Traditional Kubernetes statefulset struggle with multi-role coordination in distributed stateful service scenarios. This solution addresses:
-- Startup order dependencies between roles
-- Complex cross-role service discovery
-- Fragmented configuration management
+- Startup order dependencies between roles  
+- Complex cross-role service discovery  
+- Fragmented configuration management  
 
 ### 🧩 Key Features
    **Multi-template Role Specification** - RoleBasedGroupSet models a distributed stateful workload as a group of K8s Workloads. This allows a user to easily specify different pod templates for different distinct groups of pods (e.g. a prefill, decode, scheduler, etc.), something which cannot be done by a single Statefulset.
