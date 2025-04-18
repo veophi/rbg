@@ -10,6 +10,7 @@ import (
 	workloadsv1alpha "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/reconciler"
 	"sigs.k8s.io/rbgs/pkg/utils"
+	"sort"
 )
 
 type DefaultDependencyManager struct {
@@ -95,6 +96,14 @@ func (m *DefaultDependencyManager) CheckDependencyReady(ctx context.Context, rbg
 // 基于DFS构建拓扑关系，判断是否存在环
 func dependencyOrder(ctx context.Context, dependencies map[string][]string) ([]string, error) {
 	logger := log.FromContext(ctx)
+
+	// sort map by keys to avoid random order
+	keys := make([]string, 0, len(dependencies))
+	for k := range dependencies {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	// Track visited nodes and detect cycles
 	completed := make(map[string]bool)
 	temp := make(map[string]bool)
@@ -134,7 +143,7 @@ func dependencyOrder(ctx context.Context, dependencies map[string][]string) ([]s
 	}
 
 	// Visit all roles
-	for role := range dependencies {
+	for _, role := range keys {
 		if !completed[role] {
 			if err := visit(role); err != nil {
 				return nil, err // Return nil if cycle detected
