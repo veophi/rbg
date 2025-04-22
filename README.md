@@ -11,14 +11,14 @@ Traditional Kubernetes statefulset struggle with multi-role coordination in dist
 - Fragmented configuration management  
 
 ### 🧩 Key Features
-   ✨ **Multi-template Role Specification** - Model a distributed stateful workload as a group of K8s Workloads.  
-   **Multi-Role Startup Sequencing** - Define role dependencies a startup order for the ReplicatedJobs in a RoleBasedGroup.       
-   🔍 **Auto Service Discovery** - Inject topology info via config files and environment variables  
-   ⚡ **Elastic Scaling** - Support group/role-level scaling  
-     **Rollout and Rolling update** -  It will be performed at the group level, which means we upgrade the groups one by one as a unit (i.e. the pods within a group are updated together).
-     **Topology-aware placement** - Be able to ensure that pods in the same group will be co-located in the same topology.
-     **All-or-nothing restart for failure handling** - Some ML inference stacksrequire all pods in the group to be recreated if one pod in the group failed or one container in the pods is restarted.
-
+  ✨ **Multi-role Template Spec** - Model distributed stateful workloads as unified K8s workload groups.  
+  🔗 **Role-based Startup Control** - Establish role dependencies and startup sequence for ReplicatedJobs in a RoleBasedGroup.  
+  🔍 **Auto Service Discovery** - Inject topology details via configs and env vars.  
+  ⚡ **Elastic Scaling** - Enable group/role-level scaling operations.  
+  🔄 **Atomic Rollout** - Group-level rollout/update: Upgrade entire groups sequentially as single units (all pods in a group updated simultaneously).  
+  🌐 **Topology-aware Placement** - Guarantee co-location of group pods within the same topology domain.  
+  🛑 **Atomic Failure Recovery** - Trigger full group recreation if any pod/container fails within the group.  
+  🔧 **Customizable Workload** - Support for multiple workload types (e.g. StatefulSet, Deployment, etc.).  
 
 ## 🏗 Conceptual Diagram
 
