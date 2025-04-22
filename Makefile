@@ -107,7 +107,7 @@ build: test ## Build manager binary.
 	go build -mod vendor -v -o bin/manager -ldflags $(ldflags) cmd/rbgs/main.go
 
 .PHONY: build-cli
-build-cli: test ## Build cli binary.
+build-cli:  ## Build cli binary.
 	GOARCH=${TARGETARCH} \
 	GOOS=${TARGETOS} \
 	CGO_ENABLED=0 \

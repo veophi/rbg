@@ -21,11 +21,13 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/duration"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -73,7 +75,7 @@ func run(cmd *cobra.Command, args []string) error {
 
 	// 定义GVR（根据你的CRD配置修改此处）
 	gvr := schema.GroupVersionResource{
-		Group:    "workloads.x-k8s.io/v1alpha1",
+		Group:    "workloads.x-k8s.io",
 		Version:  "v1alpha1",
 		Resource: "rolebasedgroups",
 	}
@@ -94,8 +96,24 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to parse status: %w", err)
 	}
 
+	creationTimestamp, found, err := unstructured.NestedString(resource.Object, "metadata", "creationTimestamp")
+	if err != nil {
+		return fmt.Errorf("failed to get creation time: %w", err)
+	}
+
+	var ageStr string
+	if found {
+		createTime, err := time.Parse(time.RFC3339, creationTimestamp)
+		if err == nil {
+			ageStr = duration.HumanDuration(time.Since(createTime))
+		}
+	}
+	if ageStr == "" {
+		ageStr = "<unknown>"
+	}
+
 	// 生成并打印报告
-	printReport(resource, roleStatuses)
+	printReport(resource, roleStatuses, ageStr)
 	return nil
 }
 
@@ -130,11 +148,12 @@ func parseStatus(resource *unstructured.Unstructured) ([]map[string]interface{},
 	return results, nil
 }
 
-func printReport(resource *unstructured.Unstructured, roleStatuses []map[string]interface{}) {
+func printReport(resource *unstructured.Unstructured, roleStatuses []map[string]interface{}, ageStr string) {
 	// 资源元数据
 	fmt.Printf("📊 Resource Overview\n")
 	fmt.Printf("  Namespace: %s\n", namespace)
 	fmt.Printf("  Name:      %s\n\n", resource.GetName())
+	fmt.Printf("  Age:       %s\n\n", ageStr)
 
 	// 角色状态
 	fmt.Println("📦 Role Statuses")
