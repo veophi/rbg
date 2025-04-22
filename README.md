@@ -28,7 +28,7 @@ Traditional Kubernetes statefulset struggle with multi-role coordination in dist
 
 ### Install Controller
 ```bash
-helm install rbgs deploy/helm/rbgs-controller -n rbgs-system --create-namespace
+helm install rbgs deploy/helm/rbgs -n rbgs-system --create-namespace
 ```
 
 ### Minimal Example

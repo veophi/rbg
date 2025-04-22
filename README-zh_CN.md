@@ -1,6 +1,6 @@
 # RoleBasedGroup API 中文文档
 
-RoleBasedGroup：用于编排多角色协作分布式工作负载服务的 API，专注于解决 AI/ML 推理工作负载的常见部署模式。特别适用于预Prefill/Decode引擎解耦场景（如prefill, decode和scheduler等角色），支持大语言模型（LLM）跨多节点设备的分布式运行。
+RoleBasedGroup：用于编排多角色协作分布式工作负载服务的 API，专注于解决 AI/ML 推理工作负载的常见部署模式。特别适用于Prefill/Decode引擎解耦场景（如prefill, decode和scheduler等角色），支持大语言模型（LLM）跨多节点设备的分布式运行。
 
 ## 📖 概述
 
@@ -28,7 +28,7 @@ RoleBasedGroup：用于编排多角色协作分布式工作负载服务的 API�
 
 ### 安装控制器
 ```bash
-helm install rbgs deploy/helm/rbgs-controller -n rbgs-system --create-namespace
+helm install rbgs deploy/helm/rbgs -n rbgs-system --create-namespace
 ```
 
 ### 最小化示例
