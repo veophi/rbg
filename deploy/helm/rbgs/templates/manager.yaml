@@ -1,9 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: rbgs-controller
+  name: rbgs-controller-manager
   labels:
     control-plane: rbgs-controller
+    namespace: {{ .Release.Namespace }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:

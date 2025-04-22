@@ -9,7 +9,7 @@ image:
   pullPolicy: IfNotPresent
   tag: 608e44c5
 
-imagePullSecrets: {}
+imagePullSecrets: []
 
 podAnnotations: {}
 
