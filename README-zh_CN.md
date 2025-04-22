@@ -1,77 +1,44 @@
-# The RoleBasedGroupSet API 
+# RoleBasedGroup API 中文文档
 
-A Kubernetes operator for orchestrating distributed stateful services with multi-role collaboration and automated service discovery.
+RoleBasedGroup：用于编排多角色协作分布式工作负载服务的 API，专注于解决 AI/ML 推理工作负载的常见部署模式。特别适用于预填充（Prefill）/解码（Decode）引擎解耦场景（如预填充、解码、调度器等角色），支持大语言模型（LLM）跨多节点设备的分布式运行。
 
-## 📖 Overview
+## 📖 概述
 
-### Background
-Traditional StatefulSets struggle with multi-role coordination in distributed stateful service scenarios. This solution addresses:
-- Startup order dependencies between roles
-- Complex cross-role service discovery
-- Fragmented configuration management
+### 背景
+传统 Kubernetes 有状态集合（StatefulSet）在分布式有状态服务场景下面临多角色协调难题。本方案重点解决：
+- 角色间启动顺序依赖  
+- 跨角色服务发现复杂  
+- 配置管理碎片化  
 
-### Core Capabilities
-✨ **Multi-Role Orchestration** - Define role dependencies with ordered/parallel startup  
-🔍 **Auto Service Discovery** - Inject topology info via config files and environment variables  
-⚡ **Elastic Scaling** - Support group/role-level scaling (future granular scaling)  
-📦 **Unified Configuration** - Dual injection via YAML and environment variables
+### 🧩 核心特性
+✨ **多角色模板定义** - 将分布式有状态工作负载建模为统一 K8s 工作负载组  
+🔗 **基于角色的启动控制** - 为 RoleBasedGroup 中的 ReplicatedJobs 建立角色依赖关系和启动序列  
+🔍 **自动服务发现** - 通过配置文件和环境变量注入拓扑细节  
+⚡ **弹性伸缩** - 支持工作组/角色级伸缩操作  
+🔄 **原子化滚动更新** - 角色级更新：以角色为单元顺序升级（同一角色内所有 Pod 同步更新）  
+🌐 **拓扑感知调度** - 保障工作组/角色内 Pod 在同一拓扑域共置  
+🛑 **原子化故障恢复** - 同一工作组/角色内任意 Pod/容器故障时触发全角色重建  
+🔧 **可定制工作负载** - 支持多种工作负载类型（如 StatefulSet、Deployment 等）  
 
-## 🏗 Architecture
+## 🏗 概念架构图
 
-```mermaid
-%%{init: {'theme': 'neutral'}}%%
-flowchart TD
-    RBGS[RoleBasedGroupSet CRD] -->|Manages| Groups
-    Groups -->|Contains| Roles
-    
-    subgraph Group[Worker Group]
-        direction TB
-        GroupCtrl[Group Controller] -->|Creates| RoleResources
-        RoleResources -->|For each Role| RoleStatefulSet[Role StatefulSet]
-        RoleStatefulSet -->|Creates| Pods
-        RoleStatefulSet -->|Bound to| RoleService[Role Headless Service]
-    end
-    
-    Pods -->|Mounts| ConfigMap[Cluster ConfigMap]
-    Pods -->|Reads| EnvVars[Environment Variables]
-    
-    RBGS -->|Status Reporting| K8sAPI[Kubernetes API]
-    
-    classDef cluster fill:#f9f9f9,stroke:#ddd
-    classDef component fill:#e6f4ff,stroke:#4da6ff
-    classDef data fill:#eaf7e6,stroke:#7ccf5c
-    
-    class RBGS,K8sAPI,GroupCtrl component
-    class RoleStatefulSet,RoleService component
-    class ConfigMap,EnvVars data
-    class Groups,Roles,Pods cluster
-```
+![](rbgs-concept.png)
 
-**Key Components**:
-- `RoleBasedGroupSet CRD`: Custom resource definition for declaring service groups
-- `Worker Group`: Isolated unit containing multiple roles
-- `Role StatefulSet`: Workload instance for each role
-- `Headless Service`: DNS record provider for role instances
-- `Config Injection`: Dual configuration through ConfigMap and environment variables
+## 🚀 快速入门
 
-## 🚀 Quick Start
-
-### Install CRD
+### 安装控制器
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/yourorg/rolebasedgroupset/main/config/crd/bases/openpatio.io_rolebasedgroupsets.yaml
+helm install rbgs deploy/helm/rbgs-controller -n rbgs-system --create-namespace
 ```
 
-### Minimal Example
+### 最小化示例
 ```yaml
-apiVersion: openpatio.io/v1alpha1
-kind: RoleBasedGroupSet
+apiVersion: workloads.x-k8s.io/v1alpha1
+kind: RoleBasedGroup
 metadata:
-  name: demo-group
+  name: nginx-cluster
 spec:
-  replicas: 2
-  startupPolicy: Ordered
-  groupTemplate:
-    roles:
+  roles:
       - role: prefill
         replicas: 2
         template: { ... }
@@ -81,91 +48,27 @@ spec:
         template: { ... }
 ```
 
-## 🧩 Key Features
+## 📚 API 文档
 
-### Coordinated Role Startup
-```mermaid
-graph TD
-    GroupSet -->|Create| Group1
-    Group1 -->|Sequential Startup| RoleA[prefill]
-    RoleA -->|Ready| RoleB[decode]
-```
-
-### Service Discovery Mechanism
-Automatically generates two configuration formats:
-
-**1. Config File** (`/etc/rbgs/cluster.yaml`)
-```yaml
-cluster:
-  local:
-    role: "decode"
-    rank: 0
-  roles:
-    prefill:
-      endpoints:
-        - address: "prefill-0.demo-group-prefill:8080"
-```
-
-**2. Environment Variables**
-```bash
-RBGS_ROLES_PREFILL_0_ADDRESS=prefill-0.demo-group-prefill:8080
-RBGS_LOCAL_ROLE=decode
-```
-
-### Status Management
-Real-time status monitoring:
-```yaml
-status:
-  phase: Running
-  readyGroups: 2/2
-  groups:
-    - groupId: "0"
-      phase: Running
-      roles:
-        - role: prefill
-          readyReplicas: 2
-```
-
-## 🔧 Advanced Configuration
-
-### Cross-Group Communication
-Expose roles via Service:
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: cross-group-svc
-spec:
-  selector:
-    patio.io/rbgs-role: scheduler
-  ports:
-    - port: 80
-      targetPort: 8080
-```
-
-### Role Extension
-Add new roles to existing groups:
-```yaml
-groupTemplate:
-  roles:
-    - role: postprocess
-      replicas: 1
-      dependencies: ["decode"]
-      template: { ... }
-```
-
-## 📚 API Documentation
-
-### Key Fields
-| Field | Type | Description |
+### 关键字段说明
+| 字段 | 类型 | 描述 |
 |-------|------|-------------|
-| `startupPolicy` | string | Startup strategy (Ordered/Parallel) |
-| `dependencies` | []string | Role dependencies list |
-| `workload` | Object | Underlying workload type (default: StatefulSet) |
+| `startupPolicy` | string | 启动策略 (Ordered/Parallel) |
+| `dependencies` | []string | 角色依赖列表 |
+| `workload` | Object | 底层工作负载类型 (默认: StatefulSet) |
 
-Full API spec: [API_REFERENCE.md](docs/API_REFERENCE.md)
+完整 API 规范：[API_REFERENCE.md]()
 
-## 🤝 Contributing
-We welcome contributions through issues and PRs! See [CONTRIBUTING.md](CONTRIBUTING.md)
+## 🤝 参与贡献
+欢迎通过提交 Issue 和 PR 参与贡献！详见[贡献指南](CONTRIBUTING.md)
 
-## License
+## 社区交流与支持
+
+访问 [Kubernetes 社区页面]() 了解参与方式。
+
+项目维护者联系方式：
+- [Slack 频道]()
+- [邮件列表]()
+
+### 行为准则
+参与 Kubernetes 社区需遵守 [Kubernetes 行为准则](code-of-conduct.md)。

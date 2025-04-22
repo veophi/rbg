@@ -15,10 +15,10 @@ Traditional Kubernetes statefulset struggle with multi-role coordination in dist
   🔗 **Role-based Startup Control** - Establish role dependencies and startup sequence for ReplicatedJobs in a RoleBasedGroup.  
   🔍 **Auto Service Discovery** - Inject topology details via configs and env vars.  
   ⚡ **Elastic Scaling** - Enable group/role-level scaling operations.  
-  🔄 **Atomic Rollout** - Group-level rollout/update: Upgrade entire groups sequentially as single units (all pods in a group updated simultaneously).  
-  🌐 **Topology-aware Placement** - Guarantee co-location of group pods within the same topology domain.  
-  🛑 **Atomic Failure Recovery** - Trigger full group recreation if any pod/container fails within the group.  
-  🔧 **Customizable Workload** - Support for multiple workload types (e.g. StatefulSet, Deployment, etc.).  
+  🔄 **Atomic Rollout** - Role-level rollout/update: Upgrade entire Roles sequentially as single units (all pods in the same role updated simultaneously).  
+  🌐 **Topology-aware Placement** - Guarantee co-location of group/role pods within the same topology domain.  
+  🛑 **Atomic Failure Recovery** - Trigger full role recreation if any pod/container fails within the same group/role.  
+  🔧 **Customizable Workload** - Support for multiple workload types (e.g. StatefulSet, Deployment, etc.) for the role.  
 
 ## 🏗 Conceptual Diagram
 
@@ -26,21 +26,20 @@ Traditional Kubernetes statefulset struggle with multi-role coordination in dist
 
 ## 🚀 Quick Start
 
-### Install CRD
+### Install Controller
 ```bash
-kubectl apply -f rolebasedgroupsets.yaml
+helm install rbgs deploy/helm/rbgs-controller -n rbgs-system --create-namespace
 ```
 
 ### Minimal Example
+
 ```yaml
-apiVersion: openpatio.io/v1alpha1
-kind: RoleBasedGroupSet
+apiVersion: workloads.x-k8s.io/v1alpha1
+kind: RoleBasedGroup
 metadata:
-  name: demo-group
+  name: nginx-cluster
 spec:
-  replicas: 2
-  groupTemplate:
-    roles:
+  roles:
       - role: prefill
         replicas: 2
         template: { ... }
@@ -60,7 +59,7 @@ spec:
 | `dependencies` | []string | Role dependencies list |
 | `workload` | Object | Underlying workload type (default: StatefulSet) |
 
-Full API spec: [API_REFERENCE.md](docs/API_REFERENCE.md)
+Full API spec: [API_REFERENCE.md]()
 
 ## 🤝 Contributing
 We welcome contributions through issues and PRs! See [CONTRIBUTING.md](CONTRIBUTING.md)
