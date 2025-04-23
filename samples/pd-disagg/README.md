@@ -15,7 +15,8 @@ kubectl apply -f samples/model-download/model-download-job.yaml
 ## 2. LingJun
 ### Deploy
 ```bash
-kubectl create configmap scheduler-run --from-file=samples/pd-disagg/scheduler-run.sh
+#kubectl create configmap scheduler-run --from-file=samples/pd-disagg/scheduler-run.yaml
+kubectl apply -f samples/pd-disagg/scheduler-run.yaml
 
 kubectl apply -f- <<EOF
 apiVersion: v1
