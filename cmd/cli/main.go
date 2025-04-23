@@ -59,28 +59,29 @@ func main() {
 }
 
 func run(cmd *cobra.Command, args []string) error {
+	// Retrieve the first argument as the resource name
 	name = args[0]
 
-	// 获取Kubernetes配置
+	// Fetch Kubernetes configuration
 	config, err := getConfig()
 	if err != nil {
 		return fmt.Errorf("failed to get kubeconfig: %w", err)
 	}
 
-	// 创建dynamic client
+	// Create a dynamic client
 	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
 		return fmt.Errorf("failed to create dynamic client: %w", err)
 	}
 
-	// 定义GVR（根据你的CRD配置修改此处）
+	// Define GVR (modify this based on your CRD configuration)
 	gvr := schema.GroupVersionResource{
 		Group:    "workloads.x-k8s.io",
 		Version:  "v1alpha1",
 		Resource: "rolebasedgroups",
 	}
 
-	// 获取资源对象
+	// Fetch the resource object
 	resource, err := dynamicClient.Resource(gvr).Namespace(namespace).Get(
 		context.TODO(),
 		name,
@@ -90,17 +91,19 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get RoleBasedGroup: %w", err)
 	}
 
-	// 解析状态
+	// Parse the status of the resource
 	roleStatuses, err := parseStatus(resource)
 	if err != nil {
 		return fmt.Errorf("failed to parse status: %w", err)
 	}
 
+	// Retrieve the creation timestamp
 	creationTimestamp, found, err := unstructured.NestedString(resource.Object, "metadata", "creationTimestamp")
 	if err != nil {
 		return fmt.Errorf("failed to get creation time: %w", err)
 	}
 
+	// Calculate the age of the resource
 	var ageStr string
 	if found {
 		createTime, err := time.Parse(time.RFC3339, creationTimestamp)
@@ -112,7 +115,7 @@ func run(cmd *cobra.Command, args []string) error {
 		ageStr = "<unknown>"
 	}
 
-	// 生成并打印报告
+	// Generate and print the report
 	printReport(resource, roleStatuses, ageStr)
 	return nil
 }
