@@ -104,11 +104,20 @@ build: test ## Build manager binary.
 	CGO_ENABLED=0 \
 	GO111MODULE=on \
 	GOPROXY=${GOPROXY} \
-	go build -mod vendor -v -o bin/manager -ldflags $(ldflags) cmd/main.go
+	go build -mod vendor -v -o bin/manager -ldflags $(ldflags) cmd/rbgs/main.go
+
+.PHONY: build-cli
+build-cli:  ## Build cli binary.
+	GOARCH=${TARGETARCH} \
+	GOOS=${TARGETOS} \
+	CGO_ENABLED=0 \
+	GO111MODULE=on \
+	GOPROXY=${GOPROXY} \
+	go build -mod vendor -v -o bin/kubectl-rbg-status -ldflags $(ldflags) cmd/cli/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/main.go
+	go run ./cmd/rbgs/main.go
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
