@@ -1,7 +1,8 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: rbgs-controller
+  name: rbgs-controller-manager
+  namespace: {{ .Release.Namespace }}
   labels:
     control-plane: rbgs-controller
 spec:
