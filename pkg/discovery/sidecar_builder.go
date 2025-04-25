@@ -3,15 +3,15 @@ package discovery
 import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"os"
 	workloadsv1alpha "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 )
 
 const (
-	RuntimeContainerName = "patio-runtime"
-	// TODO 替换为正式版本镜像
-	RuntimeContainerImage       = "registry.ap-southeast-1.aliyuncs.com/zibai-test/patio-runtime:v0.1.0"
-	RuntimeGroupConfigFileName  = "patio-group-config"
-	RuntimeGroupConfigMountPath = "/etc/patio"
+	RuntimeContainerName         = "patio-runtime"
+	DefaultRuntimeContainerImage = "registry-cn-hangzhou.ack.aliyuncs.com/dev/patio-runtime:0968f02d"
+	RuntimeGroupConfigFileName   = "patio-group-config"
+	RuntimeGroupConfigMountPath  = "/etc/patio"
 )
 
 type SidecarBuilder struct {
@@ -43,7 +43,7 @@ func (builder *SidecarBuilder) Build(podSpec *v1.PodTemplateSpec) error {
 		return nil
 	}
 
-	containerImage := RuntimeContainerImage
+	containerImage := getPatioRuntimeEngine()
 	if curRole.RuntimeEngine.Image != "" {
 		containerImage = curRole.RuntimeEngine.Image
 	}
@@ -54,8 +54,9 @@ func (builder *SidecarBuilder) Build(podSpec *v1.PodTemplateSpec) error {
 		Image: containerImage,
 		Ports: []v1.ContainerPort{
 			{
-				ContainerPort: 8080,
+				ContainerPort: 9091,
 				Protocol:      v1.ProtocolTCP,
+				Name:          "inference-metrics-port",
 			},
 		},
 		Resources: v1.ResourceRequirements{
@@ -103,4 +104,12 @@ func (builder *SidecarBuilder) Build(podSpec *v1.PodTemplateSpec) error {
 	}
 
 	return nil
+}
+
+func getPatioRuntimeEngine() string {
+	value := os.Getenv("PATIO_RUNTIME_IMAGE")
+	if value == "" {
+		return DefaultRuntimeContainerImage
+	}
+	return value
 }
