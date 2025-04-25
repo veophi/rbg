@@ -3,6 +3,8 @@ package utils
 import (
 	"context"
 	"fmt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -23,4 +25,18 @@ func CheckCrdExists(reader client.Reader, crdName string) error {
 		}
 	}
 	return fmt.Errorf("CRD %s exists but not established", crdName)
+}
+
+func CheckOwnerReference(ownerReferences []metav1.OwnerReference, gvk schema.GroupVersionKind) bool {
+	if len(ownerReferences) == 0 {
+		return false
+	}
+
+	for _, ownerReference := range ownerReferences {
+		if ownerReference.Kind == gvk.Kind && ownerReference.APIVersion == gvk.GroupVersion().String() {
+			return true
+		}
+	}
+
+	return false
 }

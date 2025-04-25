@@ -2,12 +2,15 @@ package reconciler
 
 import (
 	"context"
+	"fmt"
 	appsv1 "k8s.io/api/apps/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	appsapplyv1 "k8s.io/client-go/applyconfigurations/apps/v1"
 	coreapplyv1 "k8s.io/client-go/applyconfigurations/core/v1"
 	metaapplyv1 "k8s.io/client-go/applyconfigurations/meta/v1"
+	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
@@ -37,6 +40,33 @@ func (r *StatefulSetReconciler) Reconciler(ctx context.Context, rbg *workloadsv1
 		logger.Error(err, "Failed to construct statefulset apply configuration")
 		return err
 	}
+	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(stsApplyConfig)
+	if err != nil {
+		logger.Error(err, "Converting obj apply configuration to json.")
+		return err
+	}
+
+	newSts := &appsv1.StatefulSet{}
+	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj, newSts); err != nil {
+		return fmt.Errorf("convert stsApplyConfig to sts error: %s", err.Error())
+	}
+
+	oldSts := &appsv1.StatefulSet{}
+	err = r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, oldSts)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	if oldSts != nil {
+		equal, err := SemanticallyEqualStatefulSet(oldSts, newSts)
+		if equal {
+			logger.V(1).Info("sts equal, skip reconcile")
+			return nil
+		}
+
+		logger.V(1).Info(fmt.Sprintf("sts not equal, diff: %s", err.Error()))
+	}
+
 	if err := utils.PatchObjectApplyConfiguration(ctx, r.client, stsApplyConfig, utils.PatchSpec); err != nil {
 		logger.Error(err, "Failed to patch statefulset apply configuration")
 		return err
@@ -137,4 +167,45 @@ func (r *StatefulSetReconciler) CheckWorkloadReady(ctx context.Context, rbg *wor
 		return false, err
 	}
 	return sts.Status.ReadyReplicas == *sts.Spec.Replicas, nil
+}
+
+func SemanticallyEqualStatefulSet(sts1, sts2 *appsv1.StatefulSet) (bool, error) {
+	if sts1 == nil || sts2 == nil {
+		if sts1 != sts2 {
+			return false, fmt.Errorf("object is nil")
+		} else {
+			return true, nil
+		}
+	}
+
+	if equal, err := objectMetaEqual(sts1.ObjectMeta, sts2.ObjectMeta); !equal {
+		return false, fmt.Errorf("objectMeta not equal: %s", err.Error())
+	}
+
+	if equal, err := statefulSetSpecEqual(sts1.Spec, sts2.Spec); !equal {
+		return false, fmt.Errorf("spec not equal: %s", err.Error())
+	}
+	return true, nil
+}
+
+func statefulSetSpecEqual(spec1, spec2 appsv1.StatefulSetSpec) (bool, error) {
+	if spec1.Replicas != nil && spec2.Replicas != nil {
+		if *spec1.Replicas != *spec2.Replicas {
+			return false, fmt.Errorf("replicas not equal, old: %d, new: %d", *spec1.Replicas, *spec2.Replicas)
+		}
+	}
+
+	if !reflect.DeepEqual(spec1.Selector, spec2.Selector) {
+		return false, fmt.Errorf("selector not equal, old: %v, new: %v", spec1.Selector, spec2.Selector)
+	}
+
+	if spec1.ServiceName != spec2.ServiceName {
+		return false, fmt.Errorf("serviceName not equal, old: %s, new: %s", spec1.ServiceName, spec2.ServiceName)
+	}
+
+	if equal, err := podTemplateSpecEqual(spec1.Template, spec2.Template); !equal {
+		return false, fmt.Errorf("podTemplateSpec not equal, %s", err.Error())
+	}
+
+	return true, nil
 }

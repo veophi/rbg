@@ -2,6 +2,8 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
@@ -30,6 +32,9 @@ func PatchObjectApplyConfiguration(ctx context.Context, k8sClient client.Client,
 	patch := &unstructured.Unstructured{
 		Object: obj,
 	}
+
+	logger.V(1).Info("patch content", "patchObject", patch.Object)
+
 	// Use server side apply and add fieldmanager to the rbg owned fields
 	// If there are conflicts in the fields owned by the rbg controller, rbg will obtain the ownership and force override
 	// these fields to the ones desired by the rbg controller
@@ -69,4 +74,13 @@ func ContainsString(slice []string, str string) bool {
 		}
 	}
 	return false
+}
+
+func PrettyJson(object interface{}) string {
+	b, err := json.MarshalIndent(object, "", "    ")
+	if err != nil {
+		fmt.Printf("ERROR: PrettyJson, %v\n %s\n", err, b)
+		return ""
+	}
+	return string(b)
 }

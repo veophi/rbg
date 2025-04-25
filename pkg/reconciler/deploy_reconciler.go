@@ -2,11 +2,14 @@ package reconciler
 
 import (
 	"context"
+	"fmt"
 	appsv1 "k8s.io/api/apps/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	appsapplyv1 "k8s.io/client-go/applyconfigurations/apps/v1"
 	metaapplyv1 "k8s.io/client-go/applyconfigurations/meta/v1"
+	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
@@ -31,6 +34,32 @@ func (r *DeploymentReconciler) Reconciler(ctx context.Context, rbg *workloadsv1a
 		logger.Error(err, "Failed to construct deploy apply configuration")
 		return err
 	}
+	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(deployApplyConfig)
+	if err != nil {
+		logger.Error(err, "Converting obj apply configuration to json.")
+		return err
+	}
+	newDeploy := &appsv1.Deployment{}
+	if err = runtime.DefaultUnstructuredConverter.FromUnstructured(obj, newDeploy); err != nil {
+		return fmt.Errorf("convert deployApplyConfig to deploy error: %s", err.Error())
+	}
+
+	oldDeploy := &appsv1.Deployment{}
+	err = r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, oldDeploy)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	if oldDeploy != nil {
+		equal, err := SemanticallyEqualDeployment(oldDeploy, newDeploy)
+		if equal {
+			logger.V(1).Info("deploy equal, skip reconcile")
+			return nil
+		}
+
+		logger.V(1).Info(fmt.Sprintf("deploy not equal, diff: %s", err.Error()))
+	}
+
 	if err := utils.PatchObjectApplyConfiguration(ctx, r.client, deployApplyConfig, utils.PatchSpec); err != nil {
 		logger.Error(err, "Failed to patch deploy apply configuration")
 		return err
@@ -96,4 +125,42 @@ func (r *DeploymentReconciler) CheckWorkloadReady(ctx context.Context, rbg *work
 		return false, err
 	}
 	return deploy.Status.ReadyReplicas == *deploy.Spec.Replicas, nil
+}
+
+func SemanticallyEqualDeployment(dep1, dep2 *appsv1.Deployment) (bool, error) {
+	if dep1 == nil || dep2 == nil {
+		if dep1 != dep2 {
+			return false, fmt.Errorf("object is nil")
+		} else {
+			return true, nil
+		}
+	}
+
+	if equal, err := objectMetaEqual(dep1.ObjectMeta, dep2.ObjectMeta); !equal {
+		return false, fmt.Errorf("objectMeta not equal: %s", err.Error())
+	}
+
+	if equal, err := deploymentSpecEqual(dep1.Spec, dep2.Spec); !equal {
+		return false, fmt.Errorf("spec not equal: %s", err.Error())
+	}
+
+	return true, nil
+}
+
+func deploymentSpecEqual(spec1, spec2 appsv1.DeploymentSpec) (bool, error) {
+	if spec1.Replicas != nil && spec2.Replicas != nil {
+		if *spec1.Replicas != *spec2.Replicas {
+			return false, fmt.Errorf("replicas not equal, old: %d, new: %d", *spec1.Replicas, *spec2.Replicas)
+		}
+	}
+
+	if !reflect.DeepEqual(spec1.Selector, spec2.Selector) {
+		return false, fmt.Errorf("selector not equal, old: %v, new: %v", spec1.Selector, spec2.Selector)
+	}
+
+	if equal, err := podTemplateSpecEqual(spec1.Template, spec2.Template); !equal {
+		return false, fmt.Errorf("podTemplateSpec not equal, %s", err.Error())
+	}
+
+	return true, nil
 }
