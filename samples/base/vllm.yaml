@@ -17,13 +17,11 @@ spec:
                 claimName: llm-model
           containers:
             - name: vllm
-              image: kube-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai/vllm:v0.7.2
+              image: kube-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai/vllm:v0.8.4
               command:
                 - sh
                 - -c
-                - "vllm serve /models/Qwen2.5-Coder-1.5B-Instruct --trust-remote-code \
-                  --port=8000 --max-model-len 2048 --gpu-memory-utilization 0.95 --enforce-eager \
-                  --dtype=half"
+                - "vllm serve /models/Qwen2.5-Coder-1.5B-Instruct --trust-remote-code --port=8000 --max-model-len 2048 --gpu-memory-utilization 0.95 --enforce-eager --dtype=half"
               ports:
                 - containerPort: 8000
               resources:

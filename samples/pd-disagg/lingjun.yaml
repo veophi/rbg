@@ -1,3 +1,5 @@
+# for ACK + LingJun Node
+---
 apiVersion: workloads.x-k8s.io/v1alpha1
 kind: RoleBasedGroup
 metadata:
@@ -6,7 +8,11 @@ spec:
   roles:
     - name: scheduler
       replicas: 1
+      #      dependencies: [ "prefill","decode" ]
       template:
+        metadata:
+          labels:
+            pd-disagg: scheduler
         spec:
           imagePullSecrets:
             - name: acr-secret
@@ -20,18 +26,29 @@ spec:
                 defaultMode: 0777
           containers:
             - name: scheduler
-              image: registry-vpc.ap-southeast-1.aliyuncs.com/zibai-test/vllm:oss_zmq_073_multi_with_scheduler_012
+              image: registry-vpc.cn-wulanchabu.aliyuncs.com/zibai-test/vllm:oss_zmq_073_multi_with_scheduler_012
               command:
                 - sh
                 - -c
-                - /app/run/scheduler-run.sh --instances-config-path=/etc/patio/instance-config.yaml --tokenizer-path=/models/Qwen2.5-7B-Instruct/tokenizer.json --cluster-scheduler=ForceSplit --instance-scheduler=LoadBalance --port=8008
+                - /app/run/scheduler-run.sh --instances-config-path=/etc/patio/instance-config.yaml --tokenizer-path=/models/QwQ-32B/tokenizer.json --cluster-scheduler=ForceSplit --instance-scheduler=LoadBalance --port=8008
               ports:
                 - containerPort: 8008
+                  name: http
+              resources:
+                limits:
+                  cpu: "8"
+                  memory: 40Gi
+                requests:
+                  cpu: "8"
+                  memory: 40Gi
               volumeMounts:
-                - mountPath: /models/Qwen2.5-7B-Instruct
+                - mountPath: /models/QwQ-32B/
                   name: model
                 - mountPath: /app/run/
                   name: scheduler-run
+          tolerations:
+            - key: "node-role.alibabacloud.com/lingjun"
+              operator: "Exists"
       runtimeEngine:
         env:
           - name: TOPO_CONFIG_FILE
@@ -39,9 +56,13 @@ spec:
         mountGroupConfig: true
         groupConfigMountPath: /etc/patio
 
-    - name: worker
-      replicas: 3
+    - name: prefill
+      replicas: 2
       template:
+        metadata:
+          labels:
+            pd-disagg: prefill
+            inference-framework: vllm
         spec:
           imagePullSecrets:
             - name: acr-secret
@@ -51,22 +72,78 @@ spec:
                 claimName: llm-model
           containers:
             - name: vllm
-              image: registry-vpc.ap-southeast-1.aliyuncs.com/zibai-test/vllm:oss_zmq_073_multi_with_scheduler_012
+              image: registry-vpc.cn-wulanchabu.aliyuncs.com/zibai-test/vllm:oss_zmq_073_multi_with_scheduler_012
               command:
                 - sh
                 - -c
-                - vllm serve /models/Qwen2.5-7B-Instruct/ --trust-remote-code --port=8000 --max-model-len 2048 --gpu-memory-utilization 0.95 --enforce-eager
+                - vllm serve /models/QwQ-32B/ --trust-remote-code --port=8000 --max-model-len 8192  --gpu-memory-utilization 0.95 --enforce-eager
               ports:
                 - containerPort: 8000
+                  name: http
               resources:
                 limits:
+                  cpu: "16"
+                  memory: 60Gi
+                  nvidia.com/gpu: "1"
+                requests:
+                  cpu: "16"
+                  memory: 60Gi
                   nvidia.com/gpu: "1"
               volumeMounts:
-                - mountPath: /models/Qwen2.5-7B-Instruct/
+                - mountPath: /models/QwQ-32B/
                   name: model
+          tolerations:
+            - key: "node-role.alibabacloud.com/lingjun"
+              operator: "Exists"
       runtimeEngine:
         args:
-          - --instance-info={"topo_type":"LingJun"}
+          - --instance-info={"topo_type":"LingJun","data":{"work_role":"prefill-only"}}
         env:
           - name: TOPO_COLLECTOR_ENDPOINT
-            value: http://$(GROUP_NAME)-scheduler:8080
+            value: http://lingjun-pd-scheduler-0.lingjun-pd-scheduler:8080
+
+    - name: decode
+      replicas: 2
+      template:
+        metadata:
+          labels:
+            pd-disagg: decode
+            inference-framework: vllm
+        spec:
+          imagePullSecrets:
+            - name: acr-secret
+          volumes:
+            - name: model
+              persistentVolumeClaim:
+                claimName: llm-model
+          containers:
+            - name: vllm
+              image: registry-vpc.cn-wulanchabu.aliyuncs.com/zibai-test/vllm:oss_zmq_073_multi_with_scheduler_012
+              command:
+                - sh
+                - -c
+                - vllm serve /models/QwQ-32B/ --trust-remote-code --port=8000 --max-model-len 8192 --gpu-memory-utilization 0.95 --enforce-eager
+              ports:
+                - containerPort: 8000
+                  name: http
+              resources:
+                limits:
+                  cpu: "16"
+                  memory: 60Gi
+                  nvidia.com/gpu: "1"
+                requests:
+                  cpu: "16"
+                  memory: 60Gi
+                  nvidia.com/gpu: "1"
+              volumeMounts:
+                - mountPath: /models/QwQ-32B/
+                  name: model
+          tolerations:
+            - key: "node-role.alibabacloud.com/lingjun"
+              operator: "Exists"
+      runtimeEngine:
+        args:
+          - --instance-info={"topo_type":"LingJun","data":{"work_role":"decode-only"}}
+        env:
+          - name: TOPO_COLLECTOR_ENDPOINT
+            value: http://lingjun-pd-scheduler-0.lingjun-pd-scheduler:8080

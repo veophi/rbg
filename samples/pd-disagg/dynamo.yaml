@@ -50,11 +50,11 @@ spec:
                   port: 8000
               resources:
                 limits:
-                  cpu: "4"
-                  memory: 8Gi
+                  cpu: "8"
+                  memory: 40Gi
                 requests:
-                  cpu: "4"
-                  memory: 8Gi
+                  cpu: "8"
+                  memory: 40Gi
               volumeMounts:
                 - mountPath: /models/Qwen2.5-7B-Instruct/
                   name: model
@@ -105,18 +105,24 @@ spec:
                   protocol: TCP
               resources:
                 limits:
-                  cpu: "4"
-                  memory: 16Gi
+                  cpu: "16"
+                  memory: 60Gi
                   nvidia.com/gpu: "1"
                 requests:
-                  cpu: "4"
-                  memory: 16Gi
+                  cpu: "16"
+                  memory: 60Gi
                   nvidia.com/gpu: "1"
               volumeMounts:
                 - mountPath: /models/Qwen2.5-7B-Instruct/
                   name: model
                 - mountPath: /dev/shm
                   name: shared-memory
+      runtimeEngine:
+        env:
+          - name: INFERENCE_ENGINE
+            value: vllm
+          - name: INFERENCE_ENGINE_ENDPOINT
+            value: http://localhost:8000
 
     - name: decoder
       replicas: 1
@@ -164,17 +170,21 @@ spec:
                   protocol: TCP
               resources:
                 limits:
-                  cpu: "4"
-                  memory: 16Gi
+                  cpu: "16"
+                  memory: 60Gi
                   nvidia.com/gpu: "1"
                 requests:
-                  cpu: "4"
-                  memory: 16Gi
+                  cpu: "16"
+                  memory: 60Gi
                   nvidia.com/gpu: "1"
               volumeMounts:
                 - mountPath: /models/Qwen2.5-7B-Instruct/
                   name: model
                 - mountPath: /dev/shm
                   name: shared-memory
-
-
+      runtimeEngine:
+        env:
+          - name: INFERENCE_ENGINE
+            value: vllm
+          - name: INFERENCE_ENGINE_ENDPOINT
+            value: http://localhost:8000
