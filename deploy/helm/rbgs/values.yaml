@@ -7,7 +7,9 @@ replicaCount: 2
 image:
   repository: registry-cn-hangzhou.ack.aliyuncs.com/dev/rbgs-controller
   pullPolicy: IfNotPresent
-  tag: 608e44c5
+  tag: cae62950
+
+patioRuntimeImage: registry-cn-hangzhou.ack.aliyuncs.com/dev/patio-runtime:0968f02d
 
 imagePullSecrets: []
 
