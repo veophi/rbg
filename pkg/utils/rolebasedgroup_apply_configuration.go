@@ -65,7 +65,23 @@ func RbgStatus() *RbgStatusApplyConfiguration {
 }
 
 func (b *RbgStatusApplyConfiguration) WithConditions(conditions ...v1.Condition) *RbgStatusApplyConfiguration {
-	b.Conditions = append(b.Conditions, conditions...)
+
+	for i := range conditions {
+		found := false
+		for j, cond := range b.Conditions {
+			if conditions[i].Type == cond.Type {
+				found = true
+				if conditions[i].Status != cond.Status {
+					b.Conditions[j] = conditions[i]
+				}
+				break
+			}
+		}
+		if !found {
+			b.Conditions = append(b.Conditions, conditions[i])
+		}
+	}
+
 	return b
 }
 

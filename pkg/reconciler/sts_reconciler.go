@@ -33,7 +33,7 @@ func NewStatefulSetReconciler(scheme *runtime.Scheme, client client.Client) *Sta
 
 func (r *StatefulSetReconciler) Reconciler(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) error {
 	logger := log.FromContext(ctx)
-	logger.Info("start to reconciler sts workload")
+	logger.V(1).Info("start to reconciling sts workload")
 
 	stsApplyConfig, err := r.constructStatefulSetApplyConfiguration(ctx, rbg, role)
 	if err != nil {
