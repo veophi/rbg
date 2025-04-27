@@ -56,7 +56,7 @@ func (builder *SidecarBuilder) Build(podSpec *v1.PodTemplateSpec) error {
 			{
 				ContainerPort: 9091,
 				Protocol:      v1.ProtocolTCP,
-				Name:          "inference-metrics-port",
+				Name:          "inf-metrics",
 			},
 		},
 		Resources: v1.ResourceRequirements{

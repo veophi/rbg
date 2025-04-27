@@ -129,6 +129,37 @@ func (r *DeploymentReconciler) CheckWorkloadReady(ctx context.Context, rbg *work
 	return deploy.Status.ReadyReplicas == *deploy.Spec.Replicas, nil
 }
 
+func (r *DeploymentReconciler) CleanupOrphanedWorkloads(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup) error {
+	logger := log.FromContext(ctx)
+	// list deploy managed by rbg
+	deployList := &appsv1.DeploymentList{}
+	if err := r.client.List(context.Background(), deployList, client.InNamespace(rbg.Namespace),
+		client.MatchingLabels(map[string]string{
+			"app.kubernetes.io/managed-by": workloadsv1alpha1.ControllerName,
+			"app.kubernetes.io/name":       rbg.Name,
+		}),
+	); err != nil {
+		return err
+	}
+
+	for _, deploy := range deployList.Items {
+		found := false
+		for _, role := range rbg.Spec.Roles {
+			if role.Workload.Kind == "Deployment" && rbg.GetWorkloadName(&role) == deploy.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			logger.Info("delete deploy", "deploy", deploy.Name)
+			if err := r.client.Delete(ctx, &deploy); err != nil {
+				return fmt.Errorf("delete sts %s error: %s", deploy.Name, err.Error())
+			}
+		}
+	}
+	return nil
+}
+
 func SemanticallyEqualDeployment(dep1, dep2 *appsv1.Deployment) (bool, error) {
 	if dep1 == nil || dep2 == nil {
 		if dep1 != dep2 {

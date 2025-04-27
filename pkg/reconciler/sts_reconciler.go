@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	appsapplyv1 "k8s.io/client-go/applyconfigurations/apps/v1"
@@ -167,6 +169,47 @@ func (r *StatefulSetReconciler) CheckWorkloadReady(ctx context.Context, rbg *wor
 		return false, err
 	}
 	return sts.Status.ReadyReplicas == *sts.Spec.Replicas, nil
+}
+
+func (r *StatefulSetReconciler) CleanupOrphanedWorkloads(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup) error {
+	logger := log.FromContext(ctx)
+	// list sts managed by rbg
+	stsList := &appsv1.StatefulSetList{}
+	if err := r.client.List(context.Background(), stsList, client.InNamespace(rbg.Namespace),
+		client.MatchingLabels(map[string]string{
+			"app.kubernetes.io/managed-by": workloadsv1alpha1.ControllerName,
+			"app.kubernetes.io/name":       rbg.Name,
+		}),
+	); err != nil {
+		return err
+	}
+
+	for _, sts := range stsList.Items {
+		found := false
+		for _, role := range rbg.Spec.Roles {
+			if role.Workload.Kind == "StatefulSet" && rbg.GetWorkloadName(&role) == sts.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			if err := r.client.Delete(ctx, &sts); err != nil {
+				return fmt.Errorf("delete sts %s error: %s", sts.Name, err.Error())
+			}
+			logger.Info("delete sts", "sts", sts.Name)
+
+			if err := r.client.Delete(ctx, &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      sts.Spec.ServiceName,
+					Namespace: sts.Namespace,
+				},
+			}); err != nil {
+				return fmt.Errorf("delete svc %s error: %s", sts.Name, err.Error())
+			}
+			logger.Info("delete svc", "svc", sts.Name)
+		}
+	}
+	return nil
 }
 
 func SemanticallyEqualStatefulSet(sts1, sts2 *appsv1.StatefulSet) (bool, error) {

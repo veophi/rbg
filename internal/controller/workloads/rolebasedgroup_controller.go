@@ -19,11 +19,12 @@ package workloads
 import (
 	"context"
 	"fmt"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"reflect"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -81,7 +82,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	// Reconcile each role
+	// Reconcile role, add & update
 	var roleStatuses []workloadsv1alpha1.RoleStatus
 	for _, role := range sortedRoles {
 		// Check dependencies first
@@ -130,8 +131,39 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
+	// delete role
+	if err := r.deleteRoles(ctx, rbg); err != nil {
+		r.recorder.Eventf(rbg, corev1.EventTypeWarning, "delete role error",
+			"Failed to delete roles for %s: %v", rbg.Name, err)
+		return ctrl.Result{}, err
+	}
+
 	r.recorder.Event(rbg, corev1.EventTypeNormal, Succeed, "ReconcileSucceed")
 	return ctrl.Result{}, nil
+}
+
+func (r *RoleBasedGroupReconciler) deleteRoles(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup) error {
+	workloadRecons := make(map[string]reconciler.WorkloadReconciler)
+	for _, role := range rbg.Spec.Roles {
+		key := fmt.Sprintf("%s-%s", role.Workload.APIVersion, role.Workload.Kind)
+		if _, ok := workloadRecons[key]; ok {
+			continue
+		} else {
+			recon, err := reconciler.NewWorkloadReconciler(role.Workload.APIVersion, role.Workload.Kind, r.scheme, r.client)
+			if err != nil {
+				return err
+			}
+			workloadRecons[key] = recon
+		}
+	}
+
+	for _, recon := range workloadRecons {
+		if err := recon.CleanupOrphanedWorkloads(ctx, rbg); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *RoleBasedGroupReconciler) updateConditions(roleStatus []workloadsv1alpha1.RoleStatus) metav1.Condition {
@@ -219,9 +251,8 @@ func WorkloadPredicate() predicate.Funcs {
 				return false
 			}
 
-			rbg := workloadsv1alpha1.RoleBasedGroup{}
-			if !utils.CheckOwnerReference(e.ObjectOld.GetOwnerReferences(), rbg.GroupVersionKind()) ||
-				utils.CheckOwnerReference(e.ObjectNew.GetOwnerReferences(), rbg.GroupVersionKind()) {
+			if !utils.CheckOwnerReference(e.ObjectOld.GetOwnerReferences(), getRbgGVK()) ||
+				utils.CheckOwnerReference(e.ObjectNew.GetOwnerReferences(), getRbgGVK()) {
 				return false
 			}
 
@@ -241,8 +272,7 @@ func WorkloadPredicate() predicate.Funcs {
 				return false
 			}
 
-			rbg := workloadsv1alpha1.RoleBasedGroup{}
-			if !utils.CheckOwnerReference(e.Object.GetOwnerReferences(), rbg.GroupVersionKind()) {
+			if !utils.CheckOwnerReference(e.Object.GetOwnerReferences(), getRbgGVK()) {
 				return false
 			}
 
@@ -253,4 +283,8 @@ func WorkloadPredicate() predicate.Funcs {
 			return false
 		},
 	}
+}
+
+func getRbgGVK() schema.GroupVersionKind {
+	return schema.FromAPIVersionAndKind(workloadsv1alpha1.GroupVersion.String(), "RoleBasedGroup")
 }

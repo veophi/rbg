@@ -15,6 +15,7 @@ type WorkloadReconciler interface {
 	ConstructRoleStatus(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) (workloadsv1alpha1.RoleStatus, error)
 	GetWorkloadType() string
 	CheckWorkloadReady(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) (bool, error)
+	CleanupOrphanedWorkloads(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup) error
 }
 
 func NewWorkloadReconciler(apiVersion, kind string, scheme *runtime.Scheme, client client.Client) (WorkloadReconciler, error) {
