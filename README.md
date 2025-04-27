@@ -22,7 +22,7 @@ Traditional Kubernetes statefulset struggle with multi-role coordination in dist
 
 ## 🏗 Conceptual Diagram
 
-![](rbgs-concept.png)
+![](doc/rbgs-concept.png)
 
 ## 🚀 Quick Start
 
@@ -62,7 +62,7 @@ spec:
 Full API spec: [API_REFERENCE.md]()
 
 ## 🤝 Contributing
-We welcome contributions through issues and PRs! See [CONTRIBUTING.md](CONTRIBUTING.md)
+We welcome contributions through issues and PRs! See [CONTRIBUTING.md](doc/CONTRIBUTING.md)
 
 ## Community, discussion, contribution, and support
 
@@ -75,4 +75,4 @@ You can reach the maintainers of this project at:
 
 ### Code of conduct
 
-Participation in the Kubernetes community is governed by the [Kubernetes Code of Conduct](code-of-conduct.md).
+Participation in the Kubernetes community is governed by the [Kubernetes Code of Conduct](doc/code-of-conduct.md).
