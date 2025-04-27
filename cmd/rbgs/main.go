@@ -22,7 +22,10 @@ import (
 	"fmt"
 	rawzap "go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -30,7 +33,9 @@ import (
 	"path/filepath"
 	goruntime "runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -93,14 +98,14 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	opts := zap.Options{
-		Development: true,
+		Development: false,
 		EncoderConfigOptions: []zap.EncoderConfigOption{
 			func(ec *zapcore.EncoderConfig) {
 				ec.MessageKey = "message"
 				ec.LevelKey = "level"
 				ec.TimeKey = "time"
 				ec.CallerKey = "caller"
-				ec.EncodeLevel = zapcore.CapitalColorLevelEncoder
+				ec.EncodeLevel = zapcore.CapitalLevelEncoder
 				ec.EncodeCaller = zapcore.ShortCallerEncoder
 				ec.EncodeTime = zapcore.ISO8601TimeEncoder
 			},
@@ -209,18 +214,8 @@ func main() {
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "335a8324.x-k8s.io",
-		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
-		// when the Manager ends. This requires the binary to immediately end when the
-		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
-		// speeds up voluntary leader transitions as the new leader don't have to wait
-		// LeaseDuration time first.
-		//
-		// In the default scaffold provided, the program ends immediately after
-		// the manager stops, so would be fine to enable this option. However,
-		// if you are doing or is intended to do any operation such as perform cleanups
-		// after the manager stops then its usage might be unsafe.
-		// LeaderElectionReleaseOnCancel: true,
+		LeaderElectionID:       workloadsv1alpha1.ControllerName,
+		Cache:                  cacheOptions(),
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -279,5 +274,22 @@ func main() {
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
+	}
+}
+
+func cacheOptions() cache.Options {
+	return cache.Options{
+		Scheme: scheme,
+		ByObject: map[client.Object]cache.ByObject{
+			&appsv1.StatefulSet{}: {
+				Label: labels.SelectorFromSet(labels.Set{"app.kubernetes.io/managed-by": workloadsv1alpha1.ControllerName}),
+			},
+			&appsv1.Deployment{}: {
+				Label: labels.SelectorFromSet(labels.Set{"app.kubernetes.io/managed-by": workloadsv1alpha1.ControllerName}),
+			},
+			&corev1.Service{}: {
+				Label: labels.SelectorFromSet(labels.Set{"app.kubernetes.io/managed-by": workloadsv1alpha1.ControllerName}),
+			},
+		},
 	}
 }
