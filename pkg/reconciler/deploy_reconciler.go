@@ -29,6 +29,8 @@ func NewDeploymentReconciler(scheme *runtime.Scheme, client client.Client) *Depl
 
 func (r *DeploymentReconciler) Reconciler(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) error {
 	logger := log.FromContext(ctx)
+	logger.V(1).Info("start to reconciling deploy workload")
+
 	deployApplyConfig, err := r.constructDeployApplyConfiguration(ctx, rbg, role)
 	if err != nil {
 		logger.Error(err, "Failed to construct deploy apply configuration")

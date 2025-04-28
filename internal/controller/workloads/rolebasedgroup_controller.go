@@ -18,13 +18,16 @@ package workloads
 
 import (
 	"context"
+	"fmt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"reflect"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,15 +38,6 @@ import (
 	"sigs.k8s.io/rbgs/pkg/dependency"
 	"sigs.k8s.io/rbgs/pkg/reconciler"
 	"sigs.k8s.io/rbgs/pkg/utils"
-)
-
-const (
-	// FailedCreate Event reason used when a resource creation fails.
-	// The event uses the error(s) as the reason.
-	FailedCreate     = "FailedCreate"
-	RolesProgressing = "RolesProgressing"
-	RolesUpdating    = "RolesUpdating"
-	CreatingRevision = "CreatingRevision"
 )
 
 // RoleBasedGroupReconciler reconciles a RoleBasedGroup object
@@ -70,6 +64,8 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// Fetch the RoleBasedGroup instance
 	rbg := &workloadsv1alpha1.RoleBasedGroup{}
 	if err := r.client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, rbg); err != nil {
+		r.recorder.Eventf(rbg, corev1.EventTypeWarning, FailedGetRBG,
+			"Failed to get rbg, err: %s", err.Error())
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -81,7 +77,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	dependencyManager := dependency.NewDefaultDependencyManager(r.scheme, r.client)
 	sortedRoles, err := dependencyManager.SortRoles(ctx, rbg)
 	if err != nil {
-		r.recorder.Event(rbg, corev1.EventTypeWarning, "InvalidDependency", err.Error())
+		r.recorder.Event(rbg, corev1.EventTypeWarning, InvalidRoleDependency, err.Error())
 		return ctrl.Result{}, err
 	}
 
@@ -89,46 +85,75 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	var roleStatuses []workloadsv1alpha1.RoleStatus
 	for _, role := range sortedRoles {
 		// Check dependencies first
-		if ready, err := dependencyManager.CheckDependencyReady(ctx, rbg, role); !ready || err != nil {
-			if err != nil {
-				return ctrl.Result{}, err
-			}
+		ready, err := dependencyManager.CheckDependencyReady(ctx, rbg, role)
+		if err != nil {
+			r.recorder.Event(rbg, corev1.EventTypeWarning, FailedCheckRoleDependency, err.Error())
+			return ctrl.Result{}, err
+		}
+		if !ready {
 			logger.Info("Dependencies not met, requeuing", "role", role.Name)
 			return ctrl.Result{RequeueAfter: 5}, nil
 		}
 
-		logger.Info("start reconcile workload")
 		reconciler, err := reconciler.NewWorkloadReconciler(role.Workload.APIVersion, role.Workload.Kind, r.scheme, r.client)
 		if err != nil {
 			logger.Error(err, "Failed to create workload reconciler")
+			r.recorder.Eventf(rbg, corev1.EventTypeWarning, FailedReconcileWorkload,
+				"Failed to reconcile role %s: %v", role.Name, err)
 			return ctrl.Result{}, err
 		}
 
 		if err := reconciler.Reconciler(ctx, rbg, role); err != nil {
-			r.recorder.Eventf(rbg, corev1.EventTypeWarning, "ReconcileFailed",
-				"Failed to reconcile %s for role %s: %v", reconciler.GetWorkloadType(), role.Name, err)
+			r.recorder.Eventf(rbg, corev1.EventTypeWarning, FailedReconcileWorkload,
+				"Failed to reconcile role %s: %v", role.Name, err)
 			return ctrl.Result{}, err
 		}
 
 		roleStatus, err := reconciler.ConstructRoleStatus(ctx, rbg, role)
 		if err != nil {
-			logger.Error(err, "Failed to construct role status")
+			r.recorder.Eventf(rbg, corev1.EventTypeWarning, FailedReconcileWorkload,
+				"Failed to construct role %s status: %v", role.Name, err)
 			return ctrl.Result{}, err
 		}
 		roleStatuses = append(roleStatuses, roleStatus)
 	}
 
+	conditions := r.updateConditions(roleStatuses)
+
 	// update rbg status
 	rbgApplyConfig := utils.RoleBasedGroup(rbg.Name, rbg.Namespace, rbg.Kind, rbg.APIVersion).
-		WithStatus(utils.RbgStatus().WithRoleStatuses(roleStatuses...))
+		WithStatus(utils.RbgStatus().WithRoleStatuses(roleStatuses...).WithConditions(conditions))
 
 	if err := utils.PatchObjectApplyConfiguration(ctx, r.client, rbgApplyConfig, utils.PatchStatus); err != nil {
-		r.recorder.Eventf(rbg, corev1.EventTypeWarning, "Update role status error",
+		r.recorder.Eventf(rbg, corev1.EventTypeWarning, FailedUpdateStatus,
 			"Failed to update status for %s: %v", rbg.Name, err)
 		return ctrl.Result{}, err
 	}
 
+	r.recorder.Event(rbg, corev1.EventTypeNormal, Succeed, "ReconcileSucceed")
 	return ctrl.Result{}, nil
+}
+
+func (r *RoleBasedGroupReconciler) updateConditions(roleStatus []workloadsv1alpha1.RoleStatus) metav1.Condition {
+	for _, role := range roleStatus {
+		if role.ReadyReplicas != role.Replicas {
+			return metav1.Condition{
+				Type:               string(workloadsv1alpha1.RoleBasedGroupReady),
+				Status:             metav1.ConditionFalse,
+				LastTransitionTime: metav1.Now(),
+				Reason:             "RoleNotReady",
+				Message:            fmt.Sprintf("role %s is not ready", role.Name),
+			}
+		}
+	}
+
+	return metav1.Condition{
+		Type:               string(workloadsv1alpha1.RoleBasedGroupReady),
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "AllRolesReady",
+		Message:            "All roles are ready",
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.

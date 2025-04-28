@@ -138,7 +138,7 @@ type RoleBasedGroupConditionType string
 const (
 	// RoleBasedGroupAvailable means the rbg is available, ie, at least the
 	// minimum available groups are up and running.
-	RoleBasedGroupAvailable RoleBasedGroupConditionType = "Available"
+	RoleBasedGroupReady RoleBasedGroupConditionType = "Ready"
 
 	// RoleBasedGroupProgressing means rbg is progressing. Progress for a
 	// rbg replica is considered when a new group is created, and when new pods
