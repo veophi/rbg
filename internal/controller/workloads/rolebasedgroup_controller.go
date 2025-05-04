@@ -19,8 +19,9 @@ package workloads
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"reflect"
+
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -246,20 +247,22 @@ func WorkloadPredicate() predicate.Funcs {
 			return false
 		},
 		UpdateFunc: func(e event.TypedUpdateEvent[client.Object]) bool {
-			if e.ObjectOld.GetOwnerReferences() == nil || len(e.ObjectOld.GetOwnerReferences()) == 0 ||
-				e.ObjectNew.GetOwnerReferences() == nil || len(e.ObjectNew.GetOwnerReferences()) == 0 {
+			// Defensive check for nil objects
+			if e.ObjectOld == nil || e.ObjectNew == nil {
 				return false
 			}
 
-			if !utils.CheckOwnerReference(e.ObjectOld.GetOwnerReferences(), getRbgGVK()) ||
-				utils.CheckOwnerReference(e.ObjectNew.GetOwnerReferences(), getRbgGVK()) {
+			// Check validity of OwnerReferences for both old and new objects
+			targetGVK := getRbgGVK()
+			if !hasValidOwnerRef(e.ObjectOld, targetGVK) ||
+				!hasValidOwnerRef(e.ObjectNew, targetGVK) {
 				return false
 			}
 
 			equal, err := reconciler.WorkloadEqual(e.ObjectOld, e.ObjectNew)
 			if !equal {
 				if err != nil {
-					ctrl.Log.Info("enqueue: workload update event",
+					ctrl.Log.V(1).Info("enqueue: workload update event",
 						"rbg", klog.KObj(e.ObjectOld), "diff", err.Error())
 				}
 				return true
@@ -268,21 +271,30 @@ func WorkloadPredicate() predicate.Funcs {
 			return false
 		},
 		DeleteFunc: func(e event.TypedDeleteEvent[client.Object]) bool {
-			if e.Object.GetOwnerReferences() == nil || len(e.Object.GetOwnerReferences()) == 0 {
+			// Ignore objects without valid OwnerReferences
+			if e.Object == nil || !hasValidOwnerRef(e.Object, getRbgGVK()) {
 				return false
 			}
 
-			if !utils.CheckOwnerReference(e.Object.GetOwnerReferences(), getRbgGVK()) {
-				return false
-			}
-
-			ctrl.Log.Info("enqueue: workload delete event", "rbg", klog.KObj(e.Object))
+			ctrl.Log.V(1).Info("enqueue: workload delete event", "rbg", klog.KObj(e.Object))
 			return true
 		},
 		GenericFunc: func(e event.TypedGenericEvent[client.Object]) bool {
 			return false
 		},
 	}
+}
+
+// hasValidOwnerRef checks if the object has valid OwnerReferences matching target GVK
+// Returns true only when:
+// 1. Object has non-empty OwnerReferences
+// 2. At least one OwnerReference matches target GroupVersionKind
+func hasValidOwnerRef(obj client.Object, targetGVK schema.GroupVersionKind) bool {
+	refs := obj.GetOwnerReferences()
+	if len(refs) == 0 {
+		return false
+	}
+	return utils.CheckOwnerReference(refs, targetGVK)
 }
 
 func getRbgGVK() schema.GroupVersionKind {

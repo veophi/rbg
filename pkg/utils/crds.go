@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"fmt"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -27,16 +28,22 @@ func CheckCrdExists(reader client.Reader, crdName string) error {
 	return fmt.Errorf("CRD %s exists but not established", crdName)
 }
 
-func CheckOwnerReference(ownerReferences []metav1.OwnerReference, gvk schema.GroupVersionKind) bool {
-	if len(ownerReferences) == 0 {
-		return false
-	}
-
-	for _, ownerReference := range ownerReferences {
-		if ownerReference.Kind == gvk.Kind && ownerReference.APIVersion == gvk.GroupVersion().String() {
+// CheckOwnerReference checks if any OwnerReference matches the target GVK.
+func CheckOwnerReference(ownerReferences []metav1.OwnerReference, targetGVK schema.GroupVersionKind) bool {
+	for _, ref := range ownerReferences {
+		// // Parse the APIVersion from OwnerReference
+		refGV, err := schema.ParseGroupVersion(ref.APIVersion)
+		if err != nil {
+			// Log invalid APIVersion format if needed (e.g., for debugging)
+			// log.Printf("Invalid APIVersion in OwnerReference: %s", ref.APIVersion)
+			continue
+		}
+		// Compare Group and Version
+		if refGV.Group == targetGVK.Group &&
+			refGV.Version == targetGVK.Version &&
+			ref.Kind == targetGVK.Kind {
 			return true
 		}
 	}
-
 	return false
 }
