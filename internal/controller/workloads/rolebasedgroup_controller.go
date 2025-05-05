@@ -247,6 +247,9 @@ func WorkloadPredicate() predicate.Funcs {
 			return false
 		},
 		UpdateFunc: func(e event.TypedUpdateEvent[client.Object]) bool {
+			ctrl.Log.V(1).Info("enter workload.onUpdateFunc", "name", e.ObjectNew.GetName(),
+				"namespace", e.ObjectNew.GetNamespace(),
+				"type", e.ObjectNew.GetObjectKind().GroupVersionKind().String())
 			// Defensive check for nil objects
 			if e.ObjectOld == nil || e.ObjectNew == nil {
 				return false
