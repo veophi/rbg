@@ -3,13 +3,14 @@ package reconciler
 import (
 	"context"
 	"fmt"
+	"reflect"
+
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	appsapplyv1 "k8s.io/client-go/applyconfigurations/apps/v1"
 	metaapplyv1 "k8s.io/client-go/applyconfigurations/meta/v1"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
@@ -52,15 +53,13 @@ func (r *DeploymentReconciler) Reconciler(ctx context.Context, rbg *workloadsv1a
 		return err
 	}
 
-	if oldDeploy != nil {
-		equal, err := SemanticallyEqualDeployment(oldDeploy, newDeploy)
-		if equal {
-			logger.V(1).Info("deploy equal, skip reconcile")
-			return nil
-		}
-
-		logger.V(1).Info(fmt.Sprintf("deploy not equal, diff: %s", err.Error()))
+	equal, err := SemanticallyEqualDeployment(oldDeploy, newDeploy)
+	if equal {
+		logger.V(1).Info("deploy equal, skip reconcile")
+		return nil
 	}
+
+	logger.V(1).Info(fmt.Sprintf("deploy not equal, diff: %s", err.Error()))
 
 	if err := utils.PatchObjectApplyConfiguration(ctx, r.client, deployApplyConfig, utils.PatchSpec); err != nil {
 		logger.Error(err, "Failed to patch deploy apply configuration")
