@@ -86,8 +86,8 @@ rules:
   - apiGroups:
       - apps
     resources:
-      - controllerrevisions
       - statefulsets
+      - deployments
     verbs:
       - create
       - delete
@@ -99,15 +99,15 @@ rules:
   - apiGroups:
       - apps
     resources:
-      - controllerrevisions/finalizers
       - statefulsets/finalizers
+      - deployments/finalizers
     verbs:
       - update
   - apiGroups:
       - apps
     resources:
-      - controllerrevisions/status
       - statefulsets/status
+      - deployments/status
     verbs:
       - get
       - patch

@@ -8,14 +8,13 @@ spec:
   roles:
     - name: scheduler
       replicas: 1
-      #      dependencies: [ "prefill","decode" ]
       template:
         metadata:
           labels:
-            pd-disagg: scheduler
+            # for acs
+            inference-stack.io/monitoring: "enabled"
+            alibabacloud.com/compute-class: performance
         spec:
-          imagePullSecrets:
-            - name: acr-secret
           volumes:
             - name: model
               persistentVolumeClaim:
@@ -26,23 +25,20 @@ spec:
                 defaultMode: 0777
           containers:
             - name: scheduler
-              image: registry-vpc.cn-wulanchabu.aliyuncs.com/zibai-test/vllm:oss_zmq_073_multi_with_scheduler_012
+              image: egslingjun-registry.cn-wulanchabu.cr.aliyuncs.com/egslingjun/training-nv-pytorch:25.04-dpd-250423
               command:
                 - sh
                 - -c
-                - /app/run/scheduler-run.sh --instances-config-path=/etc/patio/instance-config.yaml --tokenizer-path=/models/QwQ-32B/tokenizer.json --cluster-scheduler=ForceSplit --instance-scheduler=LoadBalance --port=8008
+                - /app/run/scheduler-run.sh --instances-config-path=/etc/patio/instance-config.yaml --tokenizer-path=/models/Qwen2.5-7B-Instruct/tokenizer.json --port=8008  --PD-mode=advanced --scheduler-mode=LoadBalance --model-path=/models/Qwen2.5-7B-Instruct
               ports:
                 - containerPort: 8008
                   name: http
               resources:
-                limits:
-                  cpu: "8"
-                  memory: 40Gi
                 requests:
-                  cpu: "8"
-                  memory: 40Gi
+                  cpu: "4"
+                  memory: 8Gi
               volumeMounts:
-                - mountPath: /models/QwQ-32B/
+                - mountPath: /models/Qwen2.5-7B-Instruct/
                   name: model
                 - mountPath: /app/run/
                   name: scheduler-run
@@ -61,37 +57,37 @@ spec:
       template:
         metadata:
           labels:
-            pd-disagg: prefill
-            inference-framework: vllm
+            inference-engine: vllm
+            inference-stack.io/monitoring: "enabled"
+            # for acs
+            alibabacloud.com/compute-class: gpu
+            alibabacloud.com/gpu-model-series: L20
         spec:
-          imagePullSecrets:
-            - name: acr-secret
           volumes:
             - name: model
               persistentVolumeClaim:
                 claimName: llm-model
           containers:
             - name: vllm
-              image: registry-vpc.cn-wulanchabu.aliyuncs.com/zibai-test/vllm:oss_zmq_073_multi_with_scheduler_012
+              image: egslingjun-registry.cn-wulanchabu.cr.aliyuncs.com/egslingjun/training-nv-pytorch:25.04-dpd-250423
               command:
                 - sh
                 - -c
-                - vllm serve /models/QwQ-32B/ --trust-remote-code --port=8000 --max-model-len 8192  --gpu-memory-utilization 0.95 --enforce-eager
+                - VLLM_USE_V1=0 vllm serve /models/Qwen2.5-7B-Instruct/ --trust-remote-code --port=8000 --max-model-len 2048  --gpu-memory-utilization 0.95  --enable-chunked-prefill=False  --no-enable-prefix-caching
               ports:
                 - containerPort: 8000
                   name: http
               resources:
                 limits:
-                  cpu: "16"
-                  memory: 60Gi
                   nvidia.com/gpu: "1"
                 requests:
-                  cpu: "16"
-                  memory: 60Gi
                   nvidia.com/gpu: "1"
               volumeMounts:
-                - mountPath: /models/QwQ-32B/
+                - mountPath: /models/Qwen2.5-7B-Instruct/
                   name: model
+              env:
+                - name: NCCL_SOCKET_IFNAME
+                  value: eth0
           tolerations:
             - key: "node-role.alibabacloud.com/lingjun"
               operator: "Exists"
@@ -100,44 +96,44 @@ spec:
           - --instance-info={"topo_type":"LingJun","data":{"work_role":"prefill-only"}}
         env:
           - name: TOPO_COLLECTOR_ENDPOINT
-            value: http://lingjun-pd-scheduler-0.lingjun-pd-scheduler:8080
+            value: http://lingjun-pd-scheduler-0.lingjun-pd-scheduler:9091
 
     - name: decode
       replicas: 2
       template:
         metadata:
           labels:
-            pd-disagg: decode
             inference-framework: vllm
+            # for acs
+            inference-stack.io/monitoring: "enabled"
+            alibabacloud.com/compute-class: gpu
+            alibabacloud.com/gpu-model-series: H20
         spec:
-          imagePullSecrets:
-            - name: acr-secret
           volumes:
             - name: model
               persistentVolumeClaim:
                 claimName: llm-model
           containers:
             - name: vllm
-              image: registry-vpc.cn-wulanchabu.aliyuncs.com/zibai-test/vllm:oss_zmq_073_multi_with_scheduler_012
+              image: egslingjun-registry.cn-wulanchabu.cr.aliyuncs.com/egslingjun/training-nv-pytorch:25.04-dpd-250423
               command:
                 - sh
                 - -c
-                - vllm serve /models/QwQ-32B/ --trust-remote-code --port=8000 --max-model-len 8192 --gpu-memory-utilization 0.95 --enforce-eager
+                - VLLM_USE_V1=0 vllm serve /models/Qwen2.5-7B-Instruct/ --trust-remote-code --port=8000 --max-model-len 2048  --gpu-memory-utilization 0.95  --enable-chunked-prefill=False  --no-enable-prefix-caching
               ports:
                 - containerPort: 8000
                   name: http
               resources:
                 limits:
-                  cpu: "16"
-                  memory: 60Gi
                   nvidia.com/gpu: "1"
                 requests:
-                  cpu: "16"
-                  memory: 60Gi
                   nvidia.com/gpu: "1"
               volumeMounts:
-                - mountPath: /models/QwQ-32B/
+                - mountPath: /models/Qwen2.5-7B-Instruct/
                   name: model
+              env:
+                - name: NCCL_SOCKET_IFNAME
+                  value: eth0
           tolerations:
             - key: "node-role.alibabacloud.com/lingjun"
               operator: "Exists"
@@ -146,4 +142,4 @@ spec:
           - --instance-info={"topo_type":"LingJun","data":{"work_role":"decode-only"}}
         env:
           - name: TOPO_COLLECTOR_ENDPOINT
-            value: http://lingjun-pd-scheduler-0.lingjun-pd-scheduler:8080
+            value: http://lingjun-pd-scheduler-0.lingjun-pd-scheduler:9091

@@ -16,7 +16,7 @@ kubectl apply -f samples/benchmark/benchmark.yaml
 ```bash
 # 执行以下命令进入Benchmark Pod
 PODNAME=$(kubectl get po -o custom-columns=":metadata.name"|grep "vllm-benchmark")
-kubectl exec -it $PODNAME -- bash
+kubectl exec -it $PODNAME -c vllm-benchmark -- bash
 
 # 下载压测数据集
 pip3 install modelscope --index-url=http://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com
@@ -28,18 +28,18 @@ modelscope download --dataset gliang1001/ShareGPT_V3_unfiltered_cleaned_split Sh
 # 执行压测 input_length=1024,tp=4,output_lenght=512,concurrency=8,num_prompts=80
 python3 /root/vllm/benchmarks/benchmark_serving.py \
         --backend vllm \
-        --model /models/Qwen2.5-7B-Instruct/ \
-        --served-model-name /models/Qwen2.5-7B-Instruct/ \
+        --model /mount/model/Qwen2.5-72B-Instruct-AWQ \
+        --served-model-name /mount/model/Qwen2.5-72B-Instruct-AWQ \
         --trust-remote-code \
         --dataset-name random \
         --dataset-path /root/ShareGPT_V3_unfiltered_cleaned_split.json \
         --random-input-len 1024 \
         --random-output-len 512 \
-        --random-range-ratio 1 \
+        --random-range-ratio 0.8 \
         --num-prompts 80 \
         --max-concurrency 8 \
-        --host 0.0.0.0 \
-        --port 8000 \
+        --host lingjun-service \
+        --port 8008 \
         --endpoint /v1/completions \
         --save-result \
         2>&1 | tee benchmark_serving.txt
