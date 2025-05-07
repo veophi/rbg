@@ -27,3 +27,5 @@ go.work
 *~
 .devcontainer
 .github
+**/*.tgz
+**/.DS_Store
