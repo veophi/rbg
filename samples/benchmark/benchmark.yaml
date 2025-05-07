@@ -13,10 +13,8 @@ spec:
     metadata:
       labels:
         app: vllm-benchmark
-        alibabacloud.com/fluid-sidecar-target: acs
-        alibabacloud.com/acs: "true"
-        alibabacloud.com/compute-qos: default
-        alibabacloud.com/compute-class: general-purpose
+        # for acs
+        alibabacloud.com/compute-class: performance
     spec:
       volumes:
         - name: llm-model
@@ -32,10 +30,10 @@ spec:
           resources:
             limits:
               cpu: "8"
-              memory: 40Gi
+              memory: 16Gi
             requests:
               cpu: "8"
-              memory: 40Gi
+              memory: 16Gi
           volumeMounts:
-            - mountPath: /models/QwQ-32B/
+            - mountPath: /mount/model
               name: llm-model
