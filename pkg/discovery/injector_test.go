@@ -1,4 +1,4 @@
-package utils
+package discovery
 
 import (
 	"testing"
@@ -162,7 +162,7 @@ func TestSemanticallyEqualConfigmap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			equal, diff := SemanticallyEqualConfigmap(tt.oldCM, tt.newCM)
+			equal, diff := semanticallyEqualConfigmap(tt.oldCM, tt.newCM)
 			if equal != tt.expected {
 				t.Errorf("%s: Expected %v, got %v.\nDiff: %s",
 					tt.name, tt.expected, equal, diff)
@@ -170,7 +170,7 @@ func TestSemanticallyEqualConfigmap(t *testing.T) {
 
 			// Test symmetry
 			if tt.oldCM != nil && tt.newCM != nil {
-				reverseEqual, _ := SemanticallyEqualConfigmap(tt.newCM, tt.oldCM)
+				reverseEqual, _ := semanticallyEqualConfigmap(tt.newCM, tt.oldCM)
 				if reverseEqual != equal {
 					t.Errorf("%s: Asymmetric comparison! Forward=%v Reverse=%v",
 						tt.name, equal, reverseEqual)

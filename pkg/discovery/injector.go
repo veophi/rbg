@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	coreapplyv1 "k8s.io/client-go/applyconfigurations/core/v1"
 	metaapplyv1 "k8s.io/client-go/applyconfigurations/meta/v1"
@@ -83,7 +86,7 @@ func (i *DefaultInjector) InjectConfig(ctx context.Context, podSpec *corev1.PodT
 	if err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
-	equal, diff := utils.SemanticallyEqualConfigmap(oldConfigmap, newConfigmap)
+	equal, diff := semanticallyEqualConfigmap(oldConfigmap, newConfigmap)
 	if equal {
 		logger.V(1).Info("configmap equal, skip reconcile")
 	} else {
@@ -177,4 +180,39 @@ func (i *DefaultInjector) InjectSidecar(ctx context.Context, podSpec *corev1.Pod
 
 	builder := NewSidecarBuilder(rbg, role)
 	return builder.Build(podSpec)
+}
+func semanticallyEqualConfigmap(old, new *corev1.ConfigMap) (bool, string) {
+	if old == nil && new == nil {
+		return true, ""
+	}
+	if old == nil || new == nil {
+		return false, fmt.Sprintf("nil mismatch: old=%v, new=%v", old, new)
+	}
+	// Defensive copy to prevent side effects
+	oldCopy := old.DeepCopy()
+	newCopy := new.DeepCopy()
+
+	oldCopy.Annotations = utils.FilterSystemAnnotations(oldCopy.Annotations)
+	newCopy.Annotations = utils.FilterSystemAnnotations(newCopy.Annotations)
+
+	objectMetaIgnoreOpts := cmpopts.IgnoreFields(
+		metav1.ObjectMeta{},
+		"ResourceVersion",
+		"UID",
+		"CreationTimestamp",
+		"Generation",
+		"ManagedFields",
+		"SelfLink",
+	)
+
+	opts := cmp.Options{
+		objectMetaIgnoreOpts,
+		cmpopts.SortSlices(func(a, b metav1.OwnerReference) bool {
+			return a.UID < b.UID // Make OwnerReferences comparison order-insensitive
+		}),
+		cmpopts.EquateEmpty(),
+	}
+
+	diff := cmp.Diff(oldCopy, newCopy, opts)
+	return diff == "", diff
 }

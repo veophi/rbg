@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
@@ -83,4 +85,20 @@ func PrettyJson(object interface{}) string {
 		return ""
 	}
 	return string(b)
+}
+
+func FilterSystemAnnotations(annotations map[string]string) map[string]string {
+	if annotations == nil {
+		return nil
+	}
+
+	filtered := make(map[string]string)
+	for k, v := range annotations {
+		// 忽略 kubernetes.io/ 开头的系统注解
+		if !strings.HasPrefix(k, "deployment.kubernetes.io/revision") &&
+			!strings.HasPrefix(k, "rolebasedgroup.workloads.x-k8s.io/") {
+			filtered[k] = v
+		}
+	}
+	return filtered
 }
