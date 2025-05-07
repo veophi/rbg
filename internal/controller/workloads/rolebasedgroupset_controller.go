@@ -27,6 +27,7 @@ import (
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
@@ -128,8 +129,9 @@ func (r *RoleBasedGroupSetReconciler) createRBG(
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *RoleBasedGroupSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *RoleBasedGroupSetReconciler) SetupWithManager(mgr ctrl.Manager, options controller.Options) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		WithOptions(options).
 		For(&workloadsv1alpha1.RoleBasedGroupSet{}).
 		Owns(&workloadsv1alpha1.RoleBasedGroup{}).
 		Named("workloads-rolebasedgroupset").

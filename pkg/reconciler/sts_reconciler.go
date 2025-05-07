@@ -3,6 +3,8 @@ package reconciler
 import (
 	"context"
 	"fmt"
+	"reflect"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -11,7 +13,6 @@ import (
 	appsapplyv1 "k8s.io/client-go/applyconfigurations/apps/v1"
 	coreapplyv1 "k8s.io/client-go/applyconfigurations/core/v1"
 	metaapplyv1 "k8s.io/client-go/applyconfigurations/meta/v1"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
@@ -66,15 +67,13 @@ func (r *StatefulSetReconciler) reconcileStatefulSet(ctx context.Context, rbg *w
 		return err
 	}
 
-	if oldSts != nil {
-		equal, err := SemanticallyEqualStatefulSet(oldSts, newSts)
-		if equal {
-			logger.V(1).Info("sts equal, skip reconcile")
-			return nil
-		}
-
-		logger.V(1).Info(fmt.Sprintf("sts not equal, diff: %s", err.Error()))
+	equal, err := SemanticallyEqualStatefulSet(oldSts, newSts)
+	if equal {
+		logger.V(1).Info("sts equal, skip reconcile")
+		return nil
 	}
+
+	logger.V(1).Info(fmt.Sprintf("sts not equal, diff: %s", err.Error()))
 
 	if err := utils.PatchObjectApplyConfiguration(ctx, r.client, stsApplyConfig, utils.PatchSpec); err != nil {
 		logger.Error(err, "Failed to patch statefulset apply configuration")
@@ -115,15 +114,13 @@ func (r *StatefulSetReconciler) reconcileHeadlessService(ctx context.Context, rb
 		return err
 	}
 
-	if oldSvc != nil {
-		equal, err := SemanticallyEqualService(oldSvc, newSvc)
-		if equal {
-			logger.V(1).Info("svc equal, skip reconcile")
-			return nil
-		}
-
-		logger.V(1).Info(fmt.Sprintf("svc not equal, diff: %s", err.Error()))
+	equal, err := SemanticallyEqualService(oldSvc, newSvc)
+	if equal {
+		logger.V(1).Info("svc equal, skip reconcile")
+		return nil
 	}
+
+	logger.V(1).Info(fmt.Sprintf("svc not equal, diff: %s", err.Error()))
 
 	if err := utils.PatchObjectApplyConfiguration(ctx, r.client, svcApplyConfig, utils.PatchSpec); err != nil {
 		logger.Error(err, "Failed to patch svc apply configuration")

@@ -20,6 +20,11 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"os"
+	"path/filepath"
+	goruntime "runtime"
+	"time"
+
 	rawzap "go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	appsv1 "k8s.io/api/apps/v1"
@@ -29,22 +34,20 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"os"
-	"path/filepath"
-	goruntime "runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"sigs.k8s.io/rbgs/version"
 
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	workloadscontroller "sigs.k8s.io/rbgs/internal/controller/workloads"
+	"sigs.k8s.io/rbgs/version"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -71,15 +74,20 @@ func printVersion() {
 // nolint:gocyclo
 func main() {
 	printVersion()
-
-	var metricsAddr string
-	var metricsCertPath, metricsCertName, metricsCertKey string
-	var webhookCertPath, webhookCertName, webhookCertKey string
-	var enableLeaderElection bool
-	var probeAddr string
-	var secureMetrics bool
-	var enableHTTP2 bool
-	var tlsOpts []func(*tls.Config)
+	var (
+		metricsAddr                                      string
+		metricsCertPath, metricsCertName, metricsCertKey string
+		webhookCertPath, webhookCertName, webhookCertKey string
+		enableLeaderElection                             bool
+		probeAddr                                        string
+		secureMetrics                                    bool
+		enableHTTP2                                      bool
+		tlsOpts                                          []func(*tls.Config)
+		development                                      bool
+		// Controller runtime options
+		maxConcurrentReconciles int
+		cacheSyncTimeout        time.Duration
+	)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8082", "The address the probe endpoint binds to.")
@@ -97,8 +105,14 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.BoolVar(&development, "development", false, "Enable development mode for controller manager.")
+	flag.IntVar(&maxConcurrentReconciles, "max-concurrent-reconciles", 10,
+		"The number of worker threads used by the the RBGS controller.")
+	flag.DurationVar(&cacheSyncTimeout, "cache-sync-timeout", 120*time.Second, "Informer cache sync timeout.")
+
+	flag.Parse()
 	opts := zap.Options{
-		Development: false,
+		Development: development,
 		EncoderConfigOptions: []zap.EncoderConfigOption{
 			func(ec *zapcore.EncoderConfig) {
 				ec.MessageKey = "message"
@@ -115,7 +129,6 @@ func main() {
 		},
 	}
 	opts.BindFlags(flag.CommandLine)
-	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
@@ -222,13 +235,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	options := controller.Options{
+		MaxConcurrentReconciles: maxConcurrentReconciles,
+		CacheSyncTimeout:        cacheSyncTimeout,
+	}
+
 	rbgReconciler := workloadscontroller.NewRoleBasedGroupReconciler(mgr)
 	if err = rbgReconciler.CheckCrdExists(); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RoleBasedGroup")
 		os.Exit(1)
 	}
 
-	if err = rbgReconciler.SetupWithManager(mgr); err != nil {
+	if err = rbgReconciler.SetupWithManager(mgr, options); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RoleBasedGroup")
 		os.Exit(1)
 	}
@@ -239,7 +257,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = rbgsReconciler.SetupWithManager(mgr); err != nil {
+	if err = rbgsReconciler.SetupWithManager(mgr, options); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RoleBasedGroupSet")
 		os.Exit(1)
 	}

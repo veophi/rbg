@@ -21,11 +21,12 @@ import (
 	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -159,6 +160,171 @@ func TestRoleBasedGroupReconciler_CheckCrdExists(t *testing.T) {
 						t.Errorf("Expected connection error, got %v", err)
 					}
 				}
+			}
+		})
+	}
+}
+
+func Test_hasValidOwnerRef(t *testing.T) {
+	// Define the specific target GVK
+	targetGVK := schema.GroupVersionKind{
+		Group:   "workloads.x-k8s.io",
+		Version: "v1alpha1",
+		Kind:    "RoleBasedGroup",
+	}
+
+	type args struct {
+		obj       client.Object
+		targetGVK schema.GroupVersionKind
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		// --------------------------
+		// Basic Scenarios
+		// --------------------------
+		{
+			name: "no owner references",
+			args: args{
+				obj: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						OwnerReferences: nil, // Explicit nil
+					},
+				},
+				targetGVK: targetGVK,
+			},
+			want: false,
+		},
+		{
+			name: "empty owner references",
+			args: args{
+				obj: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						OwnerReferences: []metav1.OwnerReference{}, // Empty slice
+					},
+				},
+				targetGVK: targetGVK,
+			},
+			want: false,
+		},
+		{
+			name: "owner reference exists but does not match",
+			args: args{
+				obj: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion: "apps/v1",    // Group mismatch
+								Kind:       "Deployment", // Kind mismatch
+							},
+						},
+					},
+				},
+				targetGVK: targetGVK,
+			},
+			want: false,
+		},
+		{
+			name: "owner reference matches exactly",
+			args: args{
+				obj: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion: "workloads.x-k8s.io/v1alpha1", // Group/Version matches
+								Kind:       "RoleBasedGroup",              // Kind matches
+							},
+						},
+					},
+				},
+				targetGVK: targetGVK,
+			},
+			want: true,
+		},
+
+		// --------------------------
+		// Edge Cases
+		// --------------------------
+		{
+			name: "partial match in multiple owner references",
+			args: args{
+				obj: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion: "batch/v1",
+								Kind:       "Job",
+							},
+							{
+								APIVersion: "workloads.x-k8s.io/v1alpha1", // Matches
+								Kind:       "RoleBasedGroup",
+							},
+						},
+					},
+				},
+				targetGVK: targetGVK,
+			},
+			want: true, // Returns true if at least one matches
+		},
+		{
+			name: "correct group/version but wrong kind",
+			args: args{
+				obj: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion: "workloads.x-k8s.io/v1alpha1",
+								Kind:       "WrongKind", // Kind mismatch
+							},
+						},
+					},
+				},
+				targetGVK: targetGVK,
+			},
+			want: false,
+		},
+		{
+			name: "correct kind but wrong group",
+			args: args{
+				obj: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion: "wrong-group/v1alpha1", // Group mismatch
+								Kind:       "RoleBasedGroup",       // Kind matches
+							},
+						},
+					},
+				},
+				targetGVK: targetGVK,
+			},
+			want: false,
+		},
+		{
+			name: "invalid apiVersion format",
+			args: args{
+				obj: &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						OwnerReferences: []metav1.OwnerReference{
+							{
+								APIVersion: "workloads.x-k8s.io/v1alpha1/beta", // Invalid format
+								Kind:       "RoleBasedGroup",
+							},
+						},
+					},
+				},
+				targetGVK: targetGVK,
+			},
+			want: false, // Parsing fails → treated as non-match
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasValidOwnerRef(tt.args.obj, tt.args.targetGVK); got != tt.want {
+				t.Errorf("hasValidOwnerRef() = %v, want %v", got, tt.want)
 			}
 		})
 	}
