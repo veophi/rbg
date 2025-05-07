@@ -3,16 +3,17 @@ package reconciler
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"sort"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	coreapplyv1 "k8s.io/client-go/applyconfigurations/core/v1"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/discovery"
-	"sort"
-	"strings"
+	"sigs.k8s.io/rbgs/pkg/utils"
 )
 
 type PodReconciler struct {
@@ -79,8 +80,8 @@ func objectMetaEqual(meta1, meta2 metav1.ObjectMeta) (bool, error) {
 		return false, fmt.Errorf("label not equal, old [%s], new [%s]", meta1.Labels, meta2.Labels)
 	}
 
-	meta1.Annotations = filterSystemAnnotations(meta1.Annotations)
-	meta2.Annotations = filterSystemAnnotations(meta2.Annotations)
+	meta1.Annotations = utils.FilterSystemAnnotations(meta1.Annotations)
+	meta2.Annotations = utils.FilterSystemAnnotations(meta2.Annotations)
 	if !reflect.DeepEqual(meta1.Annotations, meta2.Annotations) {
 		return false, fmt.Errorf("annotation not equal, old [%s], new [%s]", meta1.Annotations, meta2.Annotations)
 	}
@@ -223,21 +224,4 @@ func sortContainers(containers []corev1.Container) []corev1.Container {
 		return sorted[i].Name < sorted[j].Name
 	})
 	return sorted
-}
-
-// filterSystemAnnotations 过滤系统注解
-func filterSystemAnnotations(annotations map[string]string) map[string]string {
-	if annotations == nil {
-		return nil
-	}
-
-	filtered := make(map[string]string)
-	for k, v := range annotations {
-		// 忽略 kubernetes.io/ 开头的系统注解
-		if !strings.HasPrefix(k, "deployment.kubernetes.io/revision") &&
-			!strings.HasPrefix(k, "rolebasedgroup.workloads.x-k8s.io/") {
-			filtered[k] = v
-		}
-	}
-	return filtered
 }
