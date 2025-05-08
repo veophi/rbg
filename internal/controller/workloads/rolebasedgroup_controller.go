@@ -71,6 +71,9 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			"Failed to get rbg, err: %s", err.Error())
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	if rbg.DeletionTimestamp != nil {
+		return ctrl.Result{}, nil
+	}
 
 	logger := log.FromContext(ctx).WithValues("rbg", klog.KObj(rbg))
 	ctx = ctrl.LoggerInto(ctx, logger)
@@ -204,7 +207,17 @@ func (r *RoleBasedGroupReconciler) SetupWithManager(mgr ctrl.Manager, options co
 
 // CheckCrdExists checks if the specified Custom Resource Definition (CRD) exists in the Kubernetes cluster.
 func (r *RoleBasedGroupReconciler) CheckCrdExists() error {
-	return utils.CheckCrdExists(r.apiReader, "rolebasedgroups.workloads.x-k8s.io")
+	crds := []string{
+		"rolebasedgroups.workloads.x-k8s.io",
+		"clusterengineruntimeprofiles.workloads.x-k8s.io",
+	}
+
+	for _, crd := range crds {
+		if err := utils.CheckCrdExists(r.apiReader, crd); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func RBGPredicate() predicate.Funcs {

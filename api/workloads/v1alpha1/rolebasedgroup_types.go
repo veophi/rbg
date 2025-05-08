@@ -60,7 +60,7 @@ type RoleSpec struct {
 	ServicePorts []corev1.ServicePort `json:"servicePorts,omitempty"`
 
 	// +optional
-	RuntimeEngine *RuntimeEngine `json:"runtimeEngine,omitempty"`
+	EngineRuntimes []EngineRuntime `json:"engineRuntimes,omitempty"`
 }
 
 type WorkloadSpec struct {
@@ -74,21 +74,16 @@ type WorkloadSpec struct {
 	Kind string `json:"kind"`
 }
 
-type RuntimeEngine struct {
-	// +optional
-	Image string `json:"image,omitempty"`
+type EngineRuntime struct {
+	// ProfileName specifies the name of the engine runtime profile to be used
+	ProfileName string `json:"profileName"`
 
+	// InjectContainers specifies the containers to be injected with the engine runtime
 	// +optional
-	Args []string `json:"args,omitempty"`
+	InjectContainers []string `json:"injectContainers,omitempty"`
 
-	// +optional
-	Env []corev1.EnvVar `json:"env,omitempty"`
-
-	// +optional
-	MountGroupConfig bool `json:"mountGroupConfig,omitempty"`
-
-	// +optional
-	GroupConfigMountPath string `json:"groupConfigMountPath,omitempty"`
+	// Containers specifies the engine runtime containers to be overridden, only support command,args overridden
+	Containers []corev1.Container `json:"containers,omitempty"`
 }
 
 // RoleBasedGroupStatus defines the observed state of RoleBasedGroup.

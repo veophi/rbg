@@ -12,6 +12,9 @@
 - [ ] delete order
 - [ ] support lws -- replace  podtemplate with leaderworkertemplate
 
+### Refactor code
+- [ ] semanticallyEqual uses cmp function
+
 ### UpdateStrategy & Failover
 
 - [ ] support upgradeStrategy by rbgs.

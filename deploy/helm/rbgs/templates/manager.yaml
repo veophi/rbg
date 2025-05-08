@@ -28,9 +28,6 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ .Chart.Name }}
-          env:
-            - name: PATIO_RUNTIME_IMAGE
-              value: {{ .Values.patioRuntimeImage }}
           args:
             - --metrics-bind-address=:8443
             - --leader-elect

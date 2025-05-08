@@ -46,7 +46,7 @@ spec:
       serviceAccountName: model-download-sa
       containers:
         - name: model-download
-          image: registry-vpc.ap-southeast-1.aliyuncs.com/zibai-test/model-download:v0.1.0
+          image: registry.cn-beijing.aliyuncs.com/zibai-test/model-download:v0.1.1
           imagePullPolicy: Always
           args:
             - --bucket-name
