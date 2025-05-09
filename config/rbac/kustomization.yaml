@@ -22,9 +22,14 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the {{ .ProjectName }} itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- workloads_clusterengineruntimeprofile_admin_role.yaml
+- workloads_clusterengineruntimeprofile_editor_role.yaml
+- workloads_clusterengineruntimeprofile_viewer_role.yaml
 - workloads_rolebasedgroupset_admin_role.yaml
 - workloads_rolebasedgroupset_editor_role.yaml
 - workloads_rolebasedgroupset_viewer_role.yaml
 - workloads_rolebasedgroup_admin_role.yaml
 - workloads_rolebasedgroup_editor_role.yaml
 - workloads_rolebasedgroup_viewer_role.yaml
+
+

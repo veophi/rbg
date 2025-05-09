@@ -14,14 +14,14 @@ spec:
                 claimName: llm-model
           containers:
             - name: scheduler
-              image: registry-vpc.ap-southeast-1.aliyuncs.com/zibai-test/mooncake:v2
+              image: registry.ap-southeast-1.aliyuncs.com/zibai-test/mooncake:v2
               imagePullPolicy: Always
               command:
                 - sh
                 - -c
                 - mooncake_master --port 50001
               volumeMounts:
-                - mountPath: pre
+                - mountPath: /models/Qwen2.5-7B-Instruct/
                   name: model
 
     - name: prefill
@@ -34,7 +34,7 @@ spec:
                 claimName: llm-model
           containers:
             - name: vllm-prefill
-              image: registry-vpc.ap-southeast-1.aliyuncs.com/zibai-test/mooncake:v2
+              image: registry.ap-southeast-1.aliyuncs.com/zibai-test/mooncake:v2
               imagePullPolicy: Always
               command:
                 - sh
@@ -54,23 +54,26 @@ spec:
               volumeMounts:
                 - mountPath: /models/Qwen2.5-7B-Instruct/
                   name: model
-      runtimeEngine:
-        args:
-          - >-
-            --instance-info={
-              "topo_type": "Mooncake",
-              "data": {
-                "metadata_server": "etcd://etcd:2379",
-                "protocol": "tcp",
-                "device_name": "",
-                "master_server_address": "$(GROUP_NAME)-scheduler-0.$(GROUP_NAME)-scheduler:50001"
-              }
-            }
-        env:
-          - name: TOPO_CONFIG_FILE
-            value: /etc/patio/mooncake.json
-        mountGroupConfig: true
-        groupConfigMountPath: /etc/patio
+                - mountPath: /etc/patio
+                  name: patio-group-config
+      engineRuntimes:
+        - profileName: patio-runtime
+          containers:
+            - name: patio-runtime
+              args:
+                - >-
+                  --instance-info={
+                    "topo_type": "Mooncake",
+                    "data": {
+                      "metadata_server": "etcd://etcd:2379",
+                      "protocol": "tcp",
+                      "device_name": "",
+                      "master_server_address": "$(GROUP_NAME)-scheduler-0.$(GROUP_NAME)-scheduler:50001"
+                    }
+                  }
+              env:
+                - name: TOPO_CONFIG_FILE
+                  value: /etc/patio/mooncake.json
 
     - name: decode
       replicas: 1
@@ -82,7 +85,7 @@ spec:
                 claimName: llm-model
           containers:
             - name: vllm-decode
-              image: registry-vpc.ap-southeast-1.aliyuncs.com/zibai-test/mooncake:v2
+              image: registry.ap-southeast-1.aliyuncs.com/zibai-test/mooncake:v2
               imagePullPolicy: Always
               command:
                 - sh
@@ -102,20 +105,23 @@ spec:
               volumeMounts:
                 - mountPath: /models/Qwen2.5-7B-Instruct/
                   name: model
-      runtimeEngine:
-        args:
-          - >-
-            --instance-info={
-              "topo_type": "Mooncake",
-              "data": {
-                "metadata_server": "etcd://etcd:2379",
-                "protocol": "tcp",
-                "device_name": "",
-                "master_server_address": "$(GROUP_NAME)-scheduler-0.$(GROUP_NAME)-scheduler:50001"
-              }
-            }
-        env:
-          - name: TOPO_CONFIG_FILE
-            value: /etc/patio/mooncake.json
-        mountGroupConfig: true
-        groupConfigMountPath: /etc/patio
+                - mountPath: /etc/patio
+                  name: patio-group-config
+      engineRuntimes:
+        - profileName: patio-runtime
+          containers:
+            - name: patio-runtime
+              args:
+                - >-
+                  --instance-info={
+                    "topo_type": "Mooncake",
+                    "data": {
+                      "metadata_server": "etcd://etcd:2379",
+                      "protocol": "tcp",
+                      "device_name": "",
+                      "master_server_address": "$(GROUP_NAME)-scheduler-0.$(GROUP_NAME)-scheduler:50001"
+                    }
+                  }
+              env:
+                - name: TOPO_CONFIG_FILE
+                  value: /etc/patio/mooncake.json

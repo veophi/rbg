@@ -14,22 +14,25 @@ spec:
                 claimName: llm-model
           containers:
             - name: vllm
-              image: kube-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai/vllm:v0.7.2
+              image: kube-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai/vllm:v0.8.4
               command:
                 - sh
                 - -c
-                - vllm serve /models/Qwen2.5-Coder-1.5B-Instruct --trust-remote-code --port=8000 --max-model-len 2048 --gpu-memory-utilization 0.95 --enforce-eager
+                - vllm serve /models/Qwen2.5-7B-Instruct/ --trust-remote-code --port=8000 --max-model-len 2048 --gpu-memory-utilization 0.95 --enforce-eager
               ports:
                 - containerPort: 8000
               resources:
                 limits:
                   nvidia.com/gpu: "1"
               volumeMounts:
-                - mountPath: /models/Qwen2.5-Coder-1.5B-Instruct
+                - mountPath: /models/Qwen2.5-7B-Instruct/
                   name: model
-      runtimeEngine:
-        env:
-          - name: INFERENCE_ENGINE
-            value: vllm
-          - name: INFERENCE_ENGINE_ENDPOINT
-            value: http://localhost:8000
+      engineRuntimes:
+        - profileName: patio-runtime
+          containers:
+            - name: patio-runtime
+              env:
+                - name: INFERENCE_ENGINE
+                  value: vllm
+                - name: INFERENCE_ENGINE_ENDPOINT
+                  value: http://localhost:8000

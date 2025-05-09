@@ -7,6 +7,7 @@
 
 ## 统一Metrics
 ```bash
+kubectl apply -f samples/runtime/patio-runtime.yaml
 kubectl apply -f samples/runtime/runtime-metric.yaml
 ```
 获取Metrics

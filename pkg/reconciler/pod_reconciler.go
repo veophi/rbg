@@ -114,6 +114,34 @@ func podSpecEqual(spec1, spec2 corev1.PodSpec) (bool, error) {
 
 // containerEqual 比较容器
 func containerEqual(c1, c2 corev1.Container) (bool, error) {
+	if c1.Name != c2.Name {
+		return false, fmt.Errorf("container name not equal")
+	}
+
+	if c1.Image != c2.Image {
+		return false, fmt.Errorf("container image not equal")
+	}
+
+	if !reflect.DeepEqual(c1.Command, c2.Command) {
+		return false, fmt.Errorf("container command not equal")
+	}
+
+	if !reflect.DeepEqual(c1.Args, c2.Args) {
+		return false, fmt.Errorf("container args not equal")
+	}
+
+	if !reflect.DeepEqual(c1.Ports, c2.Ports) {
+		return false, fmt.Errorf("container ports not equal")
+	}
+
+	if !reflect.DeepEqual(c1.Resources, c2.Resources) {
+		return false, fmt.Errorf("container resources not equal")
+	}
+
+	if c1.ImagePullPolicy != "" && c2.ImagePullPolicy != "" && c1.ImagePullPolicy != c2.ImagePullPolicy {
+		return false, fmt.Errorf("container image pull policy not equal, old: %s, new: %s", c1.ImagePullPolicy, c2.ImagePullPolicy)
+	}
+
 	// 比较环境变量
 	if equal, err := envVarsEqual(c1.Env, c2.Env); !equal {
 		return false, fmt.Errorf("env not equal: %s", err.Error())

@@ -1,7 +1,6 @@
 ## Append samples of your project ##
 resources:
-- workloads_v1_rolebasedgroup.yaml
-- workloads.x-k8s.io_v1alpha1_rolebasedgroup.yaml
 - workloads_v1alpha1_rolebasedgroup.yaml
 - workloads_v1alpha1_rolebasedgroupset.yaml
+- workloads_v1alpha1_clusterengineruntimeprofile.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples
