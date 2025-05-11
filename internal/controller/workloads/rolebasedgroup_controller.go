@@ -89,6 +89,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Reconcile role, add & update
 	var roleStatuses []workloadsv1alpha1.RoleStatus
+	var updateStatus bool
 	for _, role := range sortedRoles {
 		// Check dependencies first
 		ready, err := dependencyManager.CheckDependencyReady(ctx, rbg, role)
@@ -115,7 +116,8 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, err
 		}
 
-		roleStatus, err := reconciler.ConstructRoleStatus(ctx, rbg, role)
+		roleStatus, shouldUpdateStatus, err := reconciler.ConstructRoleStatus(ctx, rbg, role)
+		updateStatus = updateStatus || shouldUpdateStatus
 		if err != nil {
 			r.recorder.Eventf(rbg, corev1.EventTypeWarning, FailedReconcileWorkload,
 				"Failed to construct role %s status: %v", role.Name, err)
@@ -124,16 +126,18 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		roleStatuses = append(roleStatuses, roleStatus)
 	}
 
-	conditions := r.updateConditions(roleStatuses)
+	if updateStatus {
+		conditions := r.updateConditions(roleStatuses)
 
-	// update rbg status
-	rbgApplyConfig := utils.RoleBasedGroup(rbg.Name, rbg.Namespace, rbg.Kind, rbg.APIVersion).
-		WithStatus(utils.RbgStatus().WithRoleStatuses(roleStatuses...).WithConditions(conditions))
+		// update rbg status
+		rbgApplyConfig := utils.RoleBasedGroup(rbg.Name, rbg.Namespace, rbg.Kind, rbg.APIVersion).
+			WithStatus(utils.RbgStatus().WithRoleStatuses(roleStatuses...).WithConditions(conditions))
 
-	if err := utils.PatchObjectApplyConfiguration(ctx, r.client, rbgApplyConfig, utils.PatchStatus); err != nil {
-		r.recorder.Eventf(rbg, corev1.EventTypeWarning, FailedUpdateStatus,
-			"Failed to update status for %s: %v", rbg.Name, err)
-		return ctrl.Result{}, err
+		if err := utils.PatchObjectApplyConfiguration(ctx, r.client, rbgApplyConfig, utils.PatchStatus); err != nil {
+			r.recorder.Eventf(rbg, corev1.EventTypeWarning, FailedUpdateStatus,
+				"Failed to update status for %s: %v", rbg.Name, err)
+			return ctrl.Result{}, err
+		}
 	}
 
 	// delete role

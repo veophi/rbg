@@ -38,3 +38,18 @@ func (rbg *RoleBasedGroup) GetRole(roleName string) (*RoleSpec, error) {
 	}
 	return nil, fmt.Errorf("role %q not found", roleName)
 }
+
+func (rbg *RoleBasedGroup) GetRoleStatus(roleName string) (status RoleStatus, found bool) {
+	if roleName == "" {
+		return
+	}
+
+	for i := range rbg.Status.RoleStatuses {
+		if rbg.Status.RoleStatuses[i].Name == roleName {
+			status = rbg.Status.RoleStatuses[i]
+			found = true
+			break
+		}
+	}
+	return
+}

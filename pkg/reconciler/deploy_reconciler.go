@@ -104,17 +104,33 @@ func (r *DeploymentReconciler) ConstructRoleStatus(
 	ctx context.Context,
 	rbg *workloadsv1alpha1.RoleBasedGroup,
 	role *workloadsv1alpha1.RoleSpec,
-) (workloadsv1alpha1.RoleStatus, error) {
+) (status workloadsv1alpha1.RoleStatus, updateStatus bool, err error) {
 	deploy := &appsv1.Deployment{}
 	if err := r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, deploy); err != nil {
-		return workloadsv1alpha1.RoleStatus{}, err
+		return workloadsv1alpha1.RoleStatus{}, updateStatus, err
+	}
+	status, found := rbg.GetRoleStatus(role.Name)
+	if found {
+		if status.Name != role.Name ||
+			status.Replicas != *deploy.Spec.Replicas ||
+			status.ReadyReplicas != deploy.Status.ReadyReplicas {
+			status = workloadsv1alpha1.RoleStatus{
+				Name:          role.Name,
+				Replicas:      *deploy.Spec.Replicas,
+				ReadyReplicas: deploy.Status.ReadyReplicas,
+			}
+			updateStatus = true
+		}
+	} else {
+		status = workloadsv1alpha1.RoleStatus{
+			Name:          role.Name,
+			Replicas:      *deploy.Spec.Replicas,
+			ReadyReplicas: deploy.Status.ReadyReplicas,
+		}
+		updateStatus = true
 	}
 
-	return workloadsv1alpha1.RoleStatus{
-		Name:          role.Name,
-		Replicas:      *deploy.Spec.Replicas,
-		ReadyReplicas: deploy.Status.ReadyReplicas,
-	}, nil
+	return status, updateStatus, nil
 }
 func (r *DeploymentReconciler) GetWorkloadType() string {
 	return "apps/v1/Deployment"
