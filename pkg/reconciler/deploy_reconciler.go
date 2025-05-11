@@ -109,6 +109,7 @@ func (r *DeploymentReconciler) ConstructRoleStatus(
 	if err := r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, deploy); err != nil {
 		return workloadsv1alpha1.RoleStatus{}, updateStatus, err
 	}
+
 	currentReplicas := *deploy.Spec.Replicas
 	currentReady := deploy.Status.ReadyReplicas
 	status, found := rbg.GetRoleStatus(role.Name)
