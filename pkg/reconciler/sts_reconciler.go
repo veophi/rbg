@@ -200,27 +200,18 @@ func (r *StatefulSetReconciler) ConstructRoleStatus(
 	if err := r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, sts); err != nil {
 		return workloadsv1alpha1.RoleStatus{}, updateStatus, err
 	}
+
+	currentReplicas := *sts.Spec.Replicas
+	currentReady := sts.Status.ReadyReplicas
 	status, found := rbg.GetRoleStatus(role.Name)
-	if found {
-		if status.Name != role.Name ||
-			status.Replicas != *sts.Spec.Replicas ||
-			status.ReadyReplicas != sts.Status.ReadyReplicas {
-			status = workloadsv1alpha1.RoleStatus{
-				Name:          role.Name,
-				Replicas:      *sts.Spec.Replicas,
-				ReadyReplicas: sts.Status.ReadyReplicas,
-			}
-			updateStatus = true
-		}
-	} else {
+	if !found || status.Replicas != currentReplicas || status.ReadyReplicas != currentReady {
 		status = workloadsv1alpha1.RoleStatus{
 			Name:          role.Name,
-			Replicas:      *sts.Spec.Replicas,
-			ReadyReplicas: sts.Status.ReadyReplicas,
+			Replicas:      currentReplicas,
+			ReadyReplicas: currentReady,
 		}
 		updateStatus = true
 	}
-
 	return status, updateStatus, nil
 }
 

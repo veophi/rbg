@@ -109,29 +109,21 @@ func (r *DeploymentReconciler) ConstructRoleStatus(
 	if err := r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, deploy); err != nil {
 		return workloadsv1alpha1.RoleStatus{}, updateStatus, err
 	}
+	currentReplicas := *deploy.Spec.Replicas
+	currentReady := deploy.Status.ReadyReplicas
 	status, found := rbg.GetRoleStatus(role.Name)
-	if found {
-		if status.Name != role.Name ||
-			status.Replicas != *deploy.Spec.Replicas ||
-			status.ReadyReplicas != deploy.Status.ReadyReplicas {
-			status = workloadsv1alpha1.RoleStatus{
-				Name:          role.Name,
-				Replicas:      *deploy.Spec.Replicas,
-				ReadyReplicas: deploy.Status.ReadyReplicas,
-			}
-			updateStatus = true
-		}
-	} else {
+	if !found || status.Replicas != currentReplicas || status.ReadyReplicas != currentReady {
 		status = workloadsv1alpha1.RoleStatus{
 			Name:          role.Name,
-			Replicas:      *deploy.Spec.Replicas,
-			ReadyReplicas: deploy.Status.ReadyReplicas,
+			Replicas:      currentReplicas,
+			ReadyReplicas: currentReady,
 		}
 		updateStatus = true
 	}
 
 	return status, updateStatus, nil
 }
+
 func (r *DeploymentReconciler) GetWorkloadType() string {
 	return "apps/v1/Deployment"
 }
