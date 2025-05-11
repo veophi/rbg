@@ -116,8 +116,8 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, err
 		}
 
-		roleStatus, shouldUpdateStatus, err := reconciler.ConstructRoleStatus(ctx, rbg, role)
-		updateStatus = updateStatus || shouldUpdateStatus
+		roleStatus, updateRoleStatus, err := reconciler.ConstructRoleStatus(ctx, rbg, role)
+		updateStatus = updateStatus || updateRoleStatus
 		if err != nil {
 			r.recorder.Eventf(rbg, corev1.EventTypeWarning, FailedReconcileWorkload,
 				"Failed to construct role %s status: %v", role.Name, err)
