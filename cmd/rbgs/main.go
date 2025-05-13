@@ -73,7 +73,6 @@ func printVersion() {
 
 // nolint:gocyclo
 func main() {
-	printVersion()
 	var (
 		metricsAddr                                      string
 		metricsCertPath, metricsCertName, metricsCertKey string
@@ -131,6 +130,8 @@ func main() {
 	opts.BindFlags(flag.CommandLine)
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	printVersion()
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
