@@ -17,14 +17,17 @@ limitations under the License.
 package e2e
 
 import (
+	"fmt"
+	"testing"
+
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	"sigs.k8s.io/rbgs/test/e2e/framework"
 	"sigs.k8s.io/rbgs/test/e2e/testcase/rbg"
-	"testing"
 )
 
 func TestE2E(t *testing.T) {
+	fmt.Println("TestE2E")
 	f := framework.NewFramework()
 	ginkgo.BeforeSuite(func() {
 		err := f.BeforeAll()
@@ -43,6 +46,7 @@ func TestE2E(t *testing.T) {
 
 	ginkgo.Describe("Run role based controller e2e tests", func() {
 		rbg.RunRbgControllerTestCases(f)
+		rbg.RunLwsRbgTestCases(f)
 	})
 
 	ginkgo.RunSpecs(t, "run rbg e2e test")

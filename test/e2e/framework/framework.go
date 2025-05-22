@@ -3,6 +3,9 @@ package framework
 import (
 	"context"
 	"fmt"
+	"log"
+	"time"
+
 	"github.com/onsi/ginkgo/v2"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -12,11 +15,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
-	"log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	lwsv1 "sigs.k8s.io/lws/api/leaderworkerset/v1"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
-	"time"
 )
 
 const DefaultNamespace = "e2e-test"
@@ -33,6 +35,7 @@ func NewFramework() *Framework {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(workloadsv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(lwsv1.AddToScheme(scheme))
 
 	cfg := config.GetConfigOrDie()
 	runtimeClient, err := client.New(cfg, client.Options{Scheme: scheme})
@@ -87,14 +90,16 @@ func (f *Framework) AfterAll() {
 }
 
 func (f *Framework) AfterEach() {
-	rbg := &workloadsv1alpha1.RoleBasedGroup{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      DefaultRbgName,
-			Namespace: DefaultNamespace,
-		},
-	}
-	err := f.Client.Delete(f.Ctx, rbg)
+	rbgList := &workloadsv1alpha1.RoleBasedGroupList{}
+	err := f.Client.List(f.Ctx, rbgList)
 	if err != nil {
-		panic(fmt.Sprintf("failed to delete rbg: %s", err.Error()))
+		panic(fmt.Sprintf("failed to list rbg: %s", err.Error()))
+	}
+	for i := range rbgList.Items {
+		rbg := &rbgList.Items[i]
+		err = f.Client.Delete(f.Ctx, rbg)
+		if err != nil {
+			panic(fmt.Sprintf("failed to delete rbg: %s", err.Error()))
+		}
 	}
 }

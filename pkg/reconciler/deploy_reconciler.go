@@ -104,10 +104,11 @@ func (r *DeploymentReconciler) ConstructRoleStatus(
 	ctx context.Context,
 	rbg *workloadsv1alpha1.RoleBasedGroup,
 	role *workloadsv1alpha1.RoleSpec,
-) (status workloadsv1alpha1.RoleStatus, updateStatus bool, err error) {
+) (workloadsv1alpha1.RoleStatus, bool, error) {
+	updateStatus := false
 	deploy := &appsv1.Deployment{}
 	if err := r.client.Get(ctx, types.NamespacedName{Name: rbg.GetWorkloadName(role), Namespace: rbg.Namespace}, deploy); err != nil {
-		return workloadsv1alpha1.RoleStatus{}, updateStatus, err
+		return workloadsv1alpha1.RoleStatus{}, false, err
 	}
 
 	currentReplicas := *deploy.Spec.Replicas

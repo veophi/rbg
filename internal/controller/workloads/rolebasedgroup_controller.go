@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	lwsv1 "sigs.k8s.io/lws/api/leaderworkerset/v1"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -204,6 +205,7 @@ func (r *RoleBasedGroupReconciler) SetupWithManager(mgr ctrl.Manager, options co
 		For(&workloadsv1alpha1.RoleBasedGroup{}, builder.WithPredicates(RBGPredicate())).
 		Owns(&appsv1.StatefulSet{}, builder.WithPredicates(WorkloadPredicate())).
 		Owns(&appsv1.Deployment{}, builder.WithPredicates(WorkloadPredicate())).
+		Owns(&lwsv1.LeaderWorkerSet{}, builder.WithPredicates(WorkloadPredicate())).
 		Owns(&corev1.Service{}).
 		Named("workloads-rolebasedgroup").
 		Complete(r)

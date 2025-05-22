@@ -162,8 +162,7 @@ endif
 
 .PHONY: install
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/crd | $(KUBECTL) apply -f -
-	$(KUBECTL) apply -f deploy/helm/rbgs/templates/engineruntime
+	$(KUSTOMIZE) build config/crd | $(KUBECTL) apply --server-side -
 
 .PHONY: uninstall
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.

@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // RoleBasedGroupSpec defines the desired state of RoleBasedGroup.
@@ -56,6 +57,10 @@ type RoleSpec struct {
 	// +kubebuilder:validation:Required
 	Template corev1.PodTemplateSpec `json:"template"`
 
+	// LeaderWorkerSet template
+	// +optional
+	LeaderWorkerSet LeaderWorkerTemplate `json:"leaderWorkerSet,omitempty"`
+
 	// +optional
 	ServicePorts []corev1.ServicePort `json:"servicePorts,omitempty"`
 
@@ -84,6 +89,29 @@ type EngineRuntime struct {
 
 	// Containers specifies the engine runtime containers to be overridden, only support command,args overridden
 	Containers []corev1.Container `json:"containers,omitempty"`
+}
+
+type LeaderWorkerTemplate struct {
+	// Number of pods to create. It is the total number of pods in each group.
+	// The minimum is 1 which represent the leader. When set to 1, the leader
+	// pod is created for each group as well as a 0-replica StatefulSet for the workers.
+	// Default to 1.
+	//
+	// +optional
+	// +kubebuilder:default=1
+	Size *int32 `json:"size,omitempty"`
+
+	// PatchLeaderTemplate indicates patching LeaderTemplate.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	PatchLeaderTemplate runtime.RawExtension `json:"patchLeaderTemplate,omitempty"`
+
+	// PatchWorkerTemplate indicates patching WorkerTemplate.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	PatchWorkerTemplate runtime.RawExtension `json:"patchWorkerTemplate,omitempty"`
 }
 
 // RoleBasedGroupStatus defines the observed state of RoleBasedGroup.

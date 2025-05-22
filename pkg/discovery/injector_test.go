@@ -2,16 +2,14 @@ package discovery
 
 import (
 	"context"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/klog/v2"
 	"reflect"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	workloadsv1alpha "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
-	"sigs.k8s.io/rbgs/pkg/utils"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	workloadsv1alpha "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 )
 
 func TestSemanticallyEqualConfigmap(t *testing.T) {
@@ -373,8 +371,6 @@ func TestInjectSidecar(t *testing.T) {
 			role, _ := rbg.GetRole("test")
 			b := NewSidecarBuilder(fakeClient, rbg, role)
 			err := b.Build(context.TODO(), tt.podSpec)
-			klog.Infof(utils.PrettyJson(tt.podSpec))
-
 			if err != nil {
 				t.Errorf("build error: %s", err.Error())
 			}
