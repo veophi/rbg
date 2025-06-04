@@ -102,3 +102,9 @@ func FilterSystemAnnotations(annotations map[string]string) map[string]string {
 	}
 	return filtered
 }
+
+// DumpJSON returns the JSON encoding
+func DumpJSON(o interface{}) string {
+	j, _ := json.Marshal(o)
+	return string(j)
+}

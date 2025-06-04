@@ -32,8 +32,14 @@ func (r *PodReconciler) ConstructPodTemplateSpecApplyConfiguration(
 	ctx context.Context,
 	rbg *workloadsv1alpha1.RoleBasedGroup,
 	role *workloadsv1alpha1.RoleSpec,
+	podTmpls ...corev1.PodTemplateSpec,
 ) (*coreapplyv1.PodTemplateSpecApplyConfiguration, error) {
-	podTemplateSpec := *role.Template.DeepCopy()
+	var podTemplateSpec corev1.PodTemplateSpec
+	if len(podTmpls) > 0 {
+		podTemplateSpec = podTmpls[0]
+	} else {
+		podTemplateSpec = *role.Template.DeepCopy()
+	}
 
 	injector := discovery.NewDefaultInjector(r.scheme, r.client)
 	if err := injector.InjectConfig(ctx, &podTemplateSpec, rbg, role); err != nil {

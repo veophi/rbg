@@ -11,9 +11,12 @@
 - [ ] remove runtime engine attribute ? name: patio/aibrix
 - [ ] delete order
 - [ ] support lws -- replace  podtemplate with leaderworkertemplate
+- [ ] add controllerrevision to record rbg revision history 
+- [ ] rbg status add observedGeneration
 
 ### Refactor code
 - [ ] semanticallyEqual uses cmp function
+- [ ] Upgrade UT and E2E coverage to 4*%
 
 ### UpdateStrategy & Failover
 
