@@ -1,7 +1,7 @@
 apiVersion: workloads.x-k8s.io/v1alpha1
 kind: RoleBasedGroup
 metadata:
-  name: mooncake-pd
+  name: vllm-mooncake-pd
 spec:
   roles:
     - name: scheduler
@@ -14,12 +14,11 @@ spec:
                 claimName: llm-model
           containers:
             - name: scheduler
-              image: registry.ap-southeast-1.aliyuncs.com/zibai-test/mooncake:v2
-              imagePullPolicy: Always
+              image: <your-vllm-mooncake-image>
               command:
                 - sh
                 - -c
-                - mooncake_master --port 50001
+                - mooncake_master --port 50001 > mooncake_master.log 2>&1 & ; python3 disagg_proxy_demo.py --port 8000 --model /models/Qwen2.5-7B-Instruct/ --prefill http://$(GROUP_NAME)-prefill-0:8000 http://$(GROUP_NAME)-prefill-1:8000 --decode http://$(GROUP_NAME)-decode-0:8000
               volumeMounts:
                 - mountPath: /models/Qwen2.5-7B-Instruct/
                   name: model
@@ -34,8 +33,7 @@ spec:
                 claimName: llm-model
           containers:
             - name: vllm-prefill
-              image: registry.ap-southeast-1.aliyuncs.com/zibai-test/mooncake:v2
-              imagePullPolicy: Always
+              image: <your-vllm-mooncake-image>
               command:
                 - sh
                 - -c
@@ -85,8 +83,7 @@ spec:
                 claimName: llm-model
           containers:
             - name: vllm-decode
-              image: registry.ap-southeast-1.aliyuncs.com/zibai-test/mooncake:v2
-              imagePullPolicy: Always
+              image: <your-vllm-mooncake-image>
               command:
                 - sh
                 - -c
@@ -125,3 +122,17 @@ spec:
               env:
                 - name: TOPO_CONFIG_FILE
                   value: /etc/patio/mooncake.json
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mooncake-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      protocol: TCP
+      targetPort: 8000
+  selector:
+    rolebasedgroup.workloads.x-k8s.io/name: vllm-mooncake-pd
+    rolebasedgroup.workloads.x-k8s.io/role: scheduler

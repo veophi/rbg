@@ -50,11 +50,11 @@ spec:
           imagePullPolicy: Always
           args:
             - --bucket-name
-            -  <your-bucket-name> # zibai-vllm-repo
+            -  <your-bucket-name> # test-bucket
             - --bucket-endpoint
             - <your-oss-endpoint> # oss-ap-southeast-1-internal.aliyuncs.com
 #            - --oss-url
-#            - oss://zibai-vllm-repo/Qwen2.5-7B-Instruct/
+#            - oss://<test-bucket>/Qwen2.5-7B-Instruct/
             - --git-url
             - https://www.modelscope.cn/Qwen/Qwen2.5-7B-Instruct.git
           env:

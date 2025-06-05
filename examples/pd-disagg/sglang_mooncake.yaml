@@ -1,0 +1,121 @@
+apiVersion: workloads.x-k8s.io/v1alpha1
+kind: RoleBasedGroup
+metadata:
+  name: sglang-pd
+spec:
+  roles:
+    - name: scheduler
+      replicas: 1
+      dependencies: [ "decode","prefill" ]
+      template:
+        spec:
+          volumes:
+            - name: model
+              persistentVolumeClaim:
+                claimName: llm-model
+          containers:
+            - name: scheduler
+              image: <your-sglang-mooncake-image>
+              command:
+                - sh
+                - -c
+                - python3 -m sglang.srt.disaggregation.mini_lb --prefill http://sglang-pd-prefill-0:8000 http://sglang-pd-prefill-1:8000 --decode http://sglang-pd-decode-0:8000 --host 0.0.0.0 --port 8000
+              volumeMounts:
+                - mountPath: /models/Qwen2.5-7B-Instruct/
+                  name: model
+                - name: patio-group-config
+                  mountPath: /etc/patio
+
+    - name: prefill
+      replicas: 2
+      template:
+        spec:
+          volumes:
+            - name: model
+              persistentVolumeClaim:
+                claimName: llm-model
+          containers:
+            - name: sglang-prefill
+              image: <your-sglang-mooncake-image>
+              imagePullPolicy: Always
+              env:
+                - name: POD_IP
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: status.podIP
+              command:
+                - sh
+                - -c
+                - python3 -m sglang.launch_server --model-path /models/Qwen2.5-7B-Instruct/ --disaggregation-mode prefill --port 8000 --host $(POD_IP)
+              ports:
+                - containerPort: 8000
+              readinessProbe:
+                tcpSocket:
+                  port: 8000
+                initialDelaySeconds: 30
+              resources:
+                limits:
+                  nvidia.com/gpu: "1"
+                  aliyun/erdma: 1
+                requests:
+                  nvidia.com/gpu: "1"
+                  aliyun/erdma: 1
+              volumeMounts:
+                - mountPath: /models/Qwen2.5-7B-Instruct/
+                  name: model
+
+    - name: decode
+      replicas: 1
+      template:
+        spec:
+          volumes:
+            - name: model
+              persistentVolumeClaim:
+                claimName: llm-model
+          containers:
+            - name: vllm-decode
+              image: <your-sglang-mooncake-image>
+              imagePullPolicy: Always
+              env:
+                - name: POD_IP
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: status.podIP
+              command:
+                - sh
+                - -c
+                - python3 -m sglang.launch_server --model-path /models/Qwen2.5-7B-Instruct/ --disaggregation-mode decode --port 8000 --host $(POD_IP)
+              ports:
+                - containerPort: 8000
+              readinessProbe:
+                tcpSocket:
+                  port: 8000
+                initialDelaySeconds: 30
+              resources:
+                limits:
+                  nvidia.com/gpu: "1"
+                  aliyun/erdma: 1
+                requests:
+                  nvidia.com/gpu: "1"
+                  aliyun/erdma: 1
+              volumeMounts:
+                - mountPath: /models/QwQ-32B/
+                  name: model
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: sglang-pd
+  name: sglang-pd
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 8000
+      protocol: TCP
+      targetPort: 8000
+  selector:
+    rolebasedgroup.workloads.x-k8s.io/name: sglang-pd
+    rolebasedgroup.workloads.x-k8s.io/role: scheduler
+  type: ClusterIP
