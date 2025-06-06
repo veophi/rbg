@@ -2,9 +2,11 @@
 
 ## 前提条件
 1. 安装Prometheus组件
-2. 创建Grafana服务（！！不能使用共享版Grafana，共享版不支持导入仪表盘）
+2. 创建Grafana服务
+3. 为RBG应用添加`alibabacloud.com/inference-workload=xxx`标签，标签值需要全局唯一。
 
 ## 接入metrics
+执行以下命令采集监控数据
 ```bash
 kubectl apply -f samples/observability/metrics/podmonitor.yaml
 ```

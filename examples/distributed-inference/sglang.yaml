@@ -18,7 +18,7 @@ spec:
                 sizeLimit: 1Gi
           containers:
             - name: sglang-leader
-              image: kube-ai-registry.cn-shanghai.cr.aliyuncs.com/kube-ai/sglang:v0.4.3-cu124
+              image: <sglang-image>
               command:
                 - sh
                 - -c

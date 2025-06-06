@@ -7,24 +7,24 @@
 
 ## 统一Metrics
 ```bash
-kubectl apply -f samples/runtime/patio-runtime.yaml
-kubectl apply -f samples/runtime/runtime-metric.yaml
+kubectl apply -f patio-runtime.yaml
+kubectl apply -f runtime-metric.yaml
 ```
 获取Metrics
 ```bash
 POD_NAME=`kubectl get po --no-headers -ocustom-columns=:metadata.name|grep runtime-metric-example`
 kubectl port-forward $POD_NAME 8080:8080
 
-curl http://localhost:8080/metrics
+curl http://localhost:8080/metrics/
 ```
 
 ## 组内拓扑发现
 ```bash
-kubectl apply -f samples/pd-disagg/llingjun.yaml
+kubectl apply -f examples/pd-disagg/vllm_mooncake.yaml
 ```
 查看组内拓扑结构
 ```bash
-kubectl exec -it pd-schedule-scheduler-0  -c scheduler -- cat /etc/patio/instance-config.yaml
+kubectl exec -it vllm-mooncake-pd-scheduler-0 -c scheduler -- cat /etc/patio/instance-config.yaml
 ```
 预期输出
 ```text

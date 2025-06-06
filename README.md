@@ -33,20 +33,8 @@ helm install rbgs deploy/helm/rbgs -n rbgs-system --create-namespace
 
 ### Minimal Example
 
-```yaml
-apiVersion: workloads.x-k8s.io/v1alpha1
-kind: RoleBasedGroup
-metadata:
-  name: nginx-cluster
-spec:
-  roles:
-      - role: prefill
-        replicas: 2
-        template: { ... }
-      - role: decode
-        replicas: 2
-        dependencies: ["prefill"]
-        template: { ... }
+```bash
+kubectl apply -f examples/base/rbg.yaml
 ```
 
 

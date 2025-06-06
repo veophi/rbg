@@ -1,11 +1,9 @@
 # Default values for rbgs-controller.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
 
 replicaCount: 2
 
 image:
-  repository: registry-cn-hangzhou.ack.aliyuncs.com/dev/rbgs-controller
+  repository: registry-cn-hangzhou.ack.aliyuncs.com/acs/rbgs-controller
   pullPolicy: IfNotPresent
   tag: v0.1.0
 
@@ -21,24 +19,18 @@ securityContext: {}
   #   drop:
   #   - ALL
   # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
+# runAsNonRoot: true
 # runAsUser: 1000
-
-service:
-  type: ClusterIP
-  port: 80
 
 resources:
   limits:
-    cpu: 4000m
-    memory: 2Gi
+    cpu: 1000m
+    memory: 1536Mi
   requests:
     cpu: 100m
-    memory: 128Mi
-
+    memory: 256Mi
 
 nodeSelector: {}
 
 tolerations: []
 
-affinity: {}

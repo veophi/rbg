@@ -4,7 +4,7 @@ LLM Benchmark Tool is a tool for benchmarking LLM models. It is used to compare 
 
 ### Deploy
 1. 下载模型文件（如果已经有pv&pvc，可以跳过）  
-修改samples/model-download/model-download-job.yaml文件，下载模型并创建pv&pvc
+修改examples/model-download/model-download-job.yaml文件，下载模型并创建pv&pvc
 ```bash
 kubectl apply -f samples/model-download/model-download-job.yaml 
 ```
