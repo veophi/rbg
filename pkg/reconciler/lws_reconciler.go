@@ -142,6 +142,7 @@ func (r *LeaderWorkerSetReconciler) constructLWSApplyConfiguration(ctx context.C
 	role *workloadsv1alpha1.RoleSpec,
 ) (*lwsapplyv1.LeaderWorkerSetApplyConfiguration, error) {
 	logger := log.FromContext(ctx)
+	// leaderTemplate
 	podReconciler := NewPodReconciler(r.scheme, r.client)
 	leaderTemp, err := patchPodTemplate(role.Template, role.LeaderWorkerSet.PatchLeaderTemplate)
 	if err != nil {
@@ -153,12 +154,17 @@ func (r *LeaderWorkerSetReconciler) constructLWSApplyConfiguration(ctx context.C
 		logger.Error(err, "patch Construct PodTemplateSpecApplyConfiguration failed", "rbg", keyOfRbg(rbg))
 		return nil, err
 	}
+
+	// workerTemplate
 	workerTemp, err := patchPodTemplate(role.Template, role.LeaderWorkerSet.PatchWorkerTemplate)
 	if err != nil {
 		logger.Error(err, "patch worker podTemplate failed", "rbg", keyOfRbg(rbg))
 		return nil, err
 	}
-	workerTemplateApplyCfg, err := podReconciler.ConstructPodTemplateSpecApplyConfiguration(ctx, rbg, role, workerTemp)
+	workerPodReconciler := NewPodReconciler(r.scheme, r.client)
+	// workerTemplate do not need to inject sidecar
+	workerPodReconciler.SetInjectors([]string{"config", "env"})
+	workerTemplateApplyCfg, err := workerPodReconciler.ConstructPodTemplateSpecApplyConfiguration(ctx, rbg, role, workerTemp)
 	if err != nil {
 		logger.Error(err, "patch Construct PodTemplateSpecApplyConfiguration failed", "rbg", keyOfRbg(rbg))
 		return nil, err

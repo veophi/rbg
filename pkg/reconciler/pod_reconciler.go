@@ -17,8 +17,9 @@ import (
 )
 
 type PodReconciler struct {
-	scheme *runtime.Scheme
-	client client.Client
+	scheme        *runtime.Scheme
+	client        client.Client
+	injectObjects []string
 }
 
 func NewPodReconciler(scheme *runtime.Scheme, client client.Client) *PodReconciler {
@@ -26,6 +27,10 @@ func NewPodReconciler(scheme *runtime.Scheme, client client.Client) *PodReconcil
 		scheme: scheme,
 		client: client,
 	}
+}
+
+func (r *PodReconciler) SetInjectors(injectObjects []string) {
+	r.injectObjects = injectObjects
 }
 
 func (r *PodReconciler) ConstructPodTemplateSpecApplyConfiguration(
@@ -41,16 +46,26 @@ func (r *PodReconciler) ConstructPodTemplateSpecApplyConfiguration(
 		podTemplateSpec = *role.Template.DeepCopy()
 	}
 
+	// inject objects
 	injector := discovery.NewDefaultInjector(r.scheme, r.client)
-	if err := injector.InjectConfig(ctx, &podTemplateSpec, rbg, role); err != nil {
-		return nil, fmt.Errorf("failed to inject config: %w", err)
+	if r.injectObjects == nil {
+		r.injectObjects = []string{"config", "sidecar", "env"}
 	}
-	// sidecar也需要rbg相关的env，先注入sidecar
-	if err := injector.InjectSidecar(ctx, &podTemplateSpec, rbg, role); err != nil {
-		return nil, fmt.Errorf("failed to inject sidecar: %w", err)
+	if utils.ContainsString(r.injectObjects, "config") {
+		if err := injector.InjectConfig(ctx, &podTemplateSpec, rbg, role); err != nil {
+			return nil, fmt.Errorf("failed to inject config: %w", err)
+		}
 	}
-	if err := injector.InjectEnv(ctx, &podTemplateSpec, rbg, role); err != nil {
-		return nil, fmt.Errorf("failed to inject env vars: %w", err)
+	if utils.ContainsString(r.injectObjects, "sidecar") {
+		// sidecar也需要rbg相关的env，先注入sidecar
+		if err := injector.InjectSidecar(ctx, &podTemplateSpec, rbg, role); err != nil {
+			return nil, fmt.Errorf("failed to inject sidecar: %w", err)
+		}
+	}
+	if utils.ContainsString(r.injectObjects, "env") {
+		if err := injector.InjectEnv(ctx, &podTemplateSpec, rbg, role); err != nil {
+			return nil, fmt.Errorf("failed to inject env vars: %w", err)
+		}
 	}
 
 	// construct pod template spec configuration

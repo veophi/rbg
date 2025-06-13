@@ -163,3 +163,17 @@ spec:
             - configMap:
                 name: dynamo-qwen3-32b
               name: dynamo-configs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dynamo-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      protocol: TCP
+      targetPort: 8000
+  selector:
+    rolebasedgroup.workloads.x-k8s.io/name: dynamo-pd
+    rolebasedgroup.workloads.x-k8s.io/role: processor
