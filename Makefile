@@ -105,7 +105,7 @@ build: test ## Build manager binary.
 	CGO_ENABLED=0 \
 	GO111MODULE=on \
 	GOPROXY=${GOPROXY} \
-	go build -mod vendor -v -o bin/manager -ldflags $(ldflags) cmd/rbgs/main.go
+	go build -v -o bin/manager -ldflags $(ldflags) cmd/rbgs/main.go
 
 .PHONY: build-cli
 build-cli:  ## Build cli binary.
