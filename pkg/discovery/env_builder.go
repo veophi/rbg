@@ -107,7 +107,7 @@ func (g *EnvBuilder) buildLocalRoleVars() []corev1.EnvVar {
 		},
 	}
 
-	if g.role.Workload.Kind == "StatefulSet" {
+	if g.role.Workload.Kind == "StatefulSet" || g.role.Workload.Kind == "LeaderWorkerSet" {
 		envVars = append(envVars,
 			corev1.EnvVar{
 				Name: "ROLE_INDEX",
