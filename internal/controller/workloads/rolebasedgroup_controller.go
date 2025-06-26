@@ -19,18 +19,15 @@ package workloads
 import (
 	"context"
 	"fmt"
-	"reflect"
-	lwsv1 "sigs.k8s.io/lws/api/leaderworkerset/v1"
-
-	"k8s.io/apimachinery/pkg/runtime/schema"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
+	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	lwsv1 "sigs.k8s.io/lws/api/leaderworkerset/v1"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/dependency"
 	"sigs.k8s.io/rbgs/pkg/reconciler"
@@ -200,15 +198,20 @@ func (r *RoleBasedGroupReconciler) updateConditions(roleStatus []workloadsv1alph
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *RoleBasedGroupReconciler) SetupWithManager(mgr ctrl.Manager, options controller.Options) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	controller := ctrl.NewControllerManagedBy(mgr).
 		WithOptions(options).
 		For(&workloadsv1alpha1.RoleBasedGroup{}, builder.WithPredicates(RBGPredicate())).
 		Owns(&appsv1.StatefulSet{}, builder.WithPredicates(WorkloadPredicate())).
 		Owns(&appsv1.Deployment{}, builder.WithPredicates(WorkloadPredicate())).
-		Owns(&lwsv1.LeaderWorkerSet{}, builder.WithPredicates(WorkloadPredicate())).
 		Owns(&corev1.Service{}).
-		Named("workloads-rolebasedgroup").
-		Complete(r)
+		Named("workloads-rolebasedgroup")
+
+	err := utils.CheckCrdExists(r.apiReader, "leaderworkerset.x-k8s.io")
+	if err == nil {
+		controller.Owns(&lwsv1.LeaderWorkerSet{}, builder.WithPredicates(WorkloadPredicate()))
+	}
+
+	return controller.Complete(r)
 }
 
 // CheckCrdExists checks if the specified Custom Resource Definition (CRD) exists in the Kubernetes cluster.
