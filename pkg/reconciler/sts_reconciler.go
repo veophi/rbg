@@ -3,20 +3,22 @@ package reconciler
 import (
 	"context"
 	"fmt"
-	"reflect"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	appsapplyv1 "k8s.io/client-go/applyconfigurations/apps/v1"
 	coreapplyv1 "k8s.io/client-go/applyconfigurations/core/v1"
 	metaapplyv1 "k8s.io/client-go/applyconfigurations/meta/v1"
+	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/utils"
+	"strconv"
 )
 
 type StatefulSetReconciler struct {
@@ -45,6 +47,12 @@ func (r *StatefulSetReconciler) reconcileStatefulSet(ctx context.Context, rbg *w
 	logger := log.FromContext(ctx)
 	logger.V(1).Info("start to reconciling sts workload")
 
+	err := validateRolloutStrategy(role.RolloutStrategy.RollingUpdate, int(*role.Replicas))
+	if err != nil {
+		logger.Error(err, "Invalid rollout strategy")
+		return err
+	}
+
 	stsApplyConfig, err := r.constructStatefulSetApplyConfiguration(ctx, rbg, role)
 	if err != nil {
 		logger.Error(err, "Failed to construct statefulset apply configuration")
@@ -68,12 +76,33 @@ func (r *StatefulSetReconciler) reconcileStatefulSet(ctx context.Context, rbg *w
 	}
 
 	equal, err := SemanticallyEqualStatefulSet(oldSts, newSts)
-	if equal {
+	if err != nil {
+		logger.V(1).Info(fmt.Sprintf("sts not equal, diff: %s", err.Error()))
+	}
+
+	stsUpdated := !equal
+	partition, replicas, err := r.rollingUpdateParameters(ctx, role, oldSts, stsUpdated)
+	if err != nil {
+		return err
+	}
+
+	if equal && partition == *oldSts.Spec.UpdateStrategy.RollingUpdate.Partition && *oldSts.Spec.Replicas == *role.Replicas {
 		logger.V(1).Info("sts equal, skip reconcile")
 		return nil
 	}
 
-	logger.V(1).Info(fmt.Sprintf("sts not equal, diff: %s", err.Error()))
+	stsApplyConfig = stsApplyConfig.WithSpec(
+		stsApplyConfig.Spec.WithReplicas(replicas).
+			WithUpdateStrategy(
+				appsapplyv1.StatefulSetUpdateStrategy().
+					WithType(appsv1.StatefulSetUpdateStrategyType(role.RolloutStrategy.Type)).
+					WithRollingUpdate(
+						appsapplyv1.RollingUpdateStatefulSetStrategy().
+							WithMaxUnavailable(role.RolloutStrategy.RollingUpdate.MaxUnavailable).
+							WithPartition(partition),
+					),
+			),
+	)
 
 	if err := utils.PatchObjectApplyConfiguration(ctx, r.client, stsApplyConfig, utils.PatchSpec); err != nil {
 		logger.Error(err, "Failed to patch statefulset apply configuration")
@@ -83,6 +112,205 @@ func (r *StatefulSetReconciler) reconcileStatefulSet(ctx context.Context, rbg *w
 	return nil
 }
 
+func (r *StatefulSetReconciler) rollingUpdateParameters(ctx context.Context, role *workloadsv1alpha1.RoleSpec, sts *appsv1.StatefulSet, stsUpdated bool) (int32, int32, error) {
+	logger := log.FromContext(ctx)
+	roleReplicas := *role.Replicas
+
+	// Case 1:
+	// If sts not created yet, all partitions should be updated,
+	// replicas should not change.
+	if sts == nil || sts.UID == "" {
+		return 0, roleReplicas, nil
+	}
+
+	stsReplicas := *sts.Spec.Replicas
+	maxSurge, err := intstr.GetScaledValueFromIntOrPercent(&role.RolloutStrategy.RollingUpdate.MaxSurge, int(roleReplicas), true)
+	if err != nil {
+		return 0, 0, err
+	}
+	// No need to burst more than the replicas.
+	if maxSurge > int(roleReplicas) {
+		maxSurge = int(roleReplicas)
+	}
+	burstReplicas := roleReplicas + int32(maxSurge)
+
+	// wantReplicas calculates the final replicas if needed.
+	wantReplicas := func(unreadyReplicas int32) int32 {
+		if unreadyReplicas <= int32(maxSurge) {
+			// When we have n unready replicas and n bursted replicas, we should
+			// start to release the burst replica gradually for the accommodation of
+			// the unready ones.
+			finalReplicas := roleReplicas + utils.NonZeroValue(int32(unreadyReplicas)-1)
+			logger.Info(fmt.Sprintf("deleting surge replica %s-%d", role.Name, finalReplicas))
+			return finalReplicas
+		}
+		return burstReplicas
+	}
+
+	// Case 2:
+	// Indicates a new rolling update here.
+	if stsUpdated {
+		partition, replicas := min(roleReplicas, stsReplicas), wantReplicas(roleReplicas)
+		// Processing scaling up/down first prior to rolling update.
+		logger.V(1).Info(fmt.Sprintf("case 2: rolling update started. partition %d, replicas: %d", partition, replicas))
+		return partition, replicas, nil
+	}
+
+	partition := *sts.Spec.UpdateStrategy.RollingUpdate.Partition
+	rollingUpdateCompleted := partition == 0 && stsReplicas == roleReplicas
+	// Case 3:
+	// In normal cases, return the values directly.
+	if rollingUpdateCompleted {
+		logger.V(1).Info("case 3: rolling update completed.")
+		return 0, roleReplicas, nil
+	}
+
+	states, err := r.getReplicaStates(ctx, sts)
+	if err != nil {
+		return 0, 0, err
+	}
+	roleUnreadyReplicas := calculateRoleUnreadyReplicas(states, roleReplicas)
+
+	originalRoleReplicas, err := strconv.Atoi(sts.Annotations[workloadsv1alpha1.RoleSizeAnnotationKey])
+	if err != nil {
+		return 0, 0, err
+	}
+	replicasUpdated := originalRoleReplicas != int(*role.Replicas)
+	// Case 4:
+	// Replicas changed during rolling update.
+	if replicasUpdated {
+		partition = min(partition, burstReplicas)
+		replicas := wantReplicas(roleUnreadyReplicas)
+		logger.V(1).Info(fmt.Sprintf("case 4: Replicas changed during rolling update. partition %d, replicas: %d", partition, replicas))
+		return partition, replicas, nil
+	}
+
+	// Case 5:
+	// Calculating the Partition during rolling update, no leaderWorkerSet updates happens.
+	rollingStep, err := intstr.GetScaledValueFromIntOrPercent(&role.RolloutStrategy.RollingUpdate.MaxUnavailable, int(roleReplicas), false)
+	if err != nil {
+		return 0, 0, err
+	}
+	// Make sure that we always respect the maxUnavailable, or
+	// we'll violate it when reclaiming bursted replicas.
+	rollingStep += maxSurge - (int(burstReplicas) - int(stsReplicas))
+	partition = rollingUpdatePartition(ctx, states, stsReplicas, int32(rollingStep), partition)
+	replicas := wantReplicas(roleUnreadyReplicas)
+	logger.V(1).Info(fmt.Sprintf("case 5: Calculating the Partition during rolling update. partition %d, replicas: %d", partition, replicas))
+	return partition, replicas, nil
+}
+
+func calculateRoleUnreadyReplicas(states []replicaState, roleReplicas int32) int32 {
+	var unreadyCount int32
+	for idx := int32(0); idx < roleReplicas; idx++ {
+		if idx >= int32(len(states)) || !states[idx].ready || !states[idx].updated {
+			unreadyCount++
+		}
+	}
+	return unreadyCount
+}
+
+type replicaState struct {
+	updated bool
+	ready   bool
+}
+
+func (r *StatefulSetReconciler) getReplicaStates(ctx context.Context, sts *appsv1.StatefulSet) ([]replicaState, error) {
+	logger := log.FromContext(ctx)
+
+	states := make([]replicaState, *sts.Spec.Replicas)
+	sortedPods := make([]corev1.Pod, *sts.Spec.Replicas)
+
+	podSelector := client.MatchingLabels(sts.Labels)
+	var podList corev1.PodList
+	if err := r.client.List(ctx, &podList, podSelector, client.InNamespace(sts.Namespace)); err != nil {
+		return nil, err
+	}
+	for i, pod := range podList.Items {
+		idx, err := strconv.Atoi(pod.Labels["apps.kubernetes.io/pod-index"])
+		if err != nil {
+			continue
+		}
+		if idx >= int(*sts.Spec.Replicas) {
+			continue
+		}
+		sortedPods[idx] = podList.Items[i]
+	}
+
+	for idx := int32(0); idx < *sts.Spec.Replicas; idx++ {
+		nominatedName := fmt.Sprintf("%s-%d", sts.Name, idx)
+		// It can happen that the leader pod or the worker statefulset hasn't created yet
+		// or under rebuilding, which also indicates not ready.
+		if nominatedName != sortedPods[idx].Name {
+			states[idx] = replicaState{
+				ready:   false,
+				updated: false,
+			}
+			continue
+		}
+
+		highestRevision, err := r.getHighestRevision(ctx, sts)
+		if err != nil {
+			logger.Error(fmt.Errorf("get sts highest controller revision error"), "sts", sts.Name)
+			return nil, err
+		}
+		podReady := utils.PodRunningAndReady(sortedPods[idx])
+		states[idx] = replicaState{
+			ready:   podReady,
+			updated: sortedPods[idx].Labels["controller-revision-hash"] == highestRevision.Name,
+		}
+	}
+	return states, nil
+}
+
+func rollingUpdatePartition(ctx context.Context, states []replicaState, stsReplicas int32, rollingStep int32, currentPartition int32) int32 {
+	logger := log.FromContext(ctx)
+
+	continuousReadyReplicas := calculateContinuousReadyReplicas(states)
+
+	// Update up to rollingStep replicas at once.
+	rollingStepPartition := utils.NonZeroValue(stsReplicas - continuousReadyReplicas - rollingStep)
+
+	// rollingStepPartition calculation above disregards the state of replicas with idx<rollingStepPartition.
+	// To prevent violating the maxUnavailable, we have to account for these replicas and increase the partition if some are not ready.
+	var unavailable int32
+	for idx := 0; idx < int(rollingStepPartition); idx++ {
+		if !states[idx].ready {
+			unavailable++
+		}
+	}
+	var partition = rollingStepPartition + unavailable
+	logger.V(1).Info("Calculating partition parameters", "partition", partition,
+		"continuousReady", continuousReadyReplicas, "rollingStep", rollingStep, "unavailable", unavailable)
+
+	// Reduce the partition if replicas are continously not ready. It is safe since updating these replicas does not impact
+	// the availability of the LWS. This is important to prevent update from getting stuck in case maxUnavailable is already violated
+	// (for example, all replicas are not ready when rolling update is started).
+	// Note that we never drop the partition below rollingStepPartition.
+	for idx := min(partition, stsReplicas-1); idx >= rollingStepPartition; idx-- {
+		if states[idx].ready && states[idx].updated {
+			continue
+		} else {
+			partition = idx
+			break
+		}
+	}
+
+	// That means Partition moves in one direction to make it simple.
+	return min(partition, currentPartition)
+}
+
+func calculateContinuousReadyReplicas(states []replicaState) int32 {
+	// Count ready replicas at tail (from last index down)
+	var continuousReadyCount int32
+	for idx := len(states) - 1; idx >= 0; idx-- {
+		if !states[idx].ready || !states[idx].updated {
+			break
+		}
+		continuousReadyCount++
+	}
+	return continuousReadyCount
+}
 func (r *StatefulSetReconciler) reconcileHeadlessService(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, role *workloadsv1alpha1.RoleSpec) error {
 	logger := log.FromContext(ctx)
 	logger.V(1).Info("start to reconciling headless service")
@@ -260,6 +488,20 @@ func (r *StatefulSetReconciler) CleanupOrphanedWorkloads(ctx context.Context, rb
 	return nil
 }
 
+func (r *StatefulSetReconciler) getHighestRevision(ctx context.Context, sts *appsv1.StatefulSet) (*appsv1.ControllerRevision, error) {
+	selector, err := v1.LabelSelectorAsSelector(&v1.LabelSelector{
+		MatchLabels: sts.Labels,
+	})
+	if err != nil {
+		return nil, err
+	}
+	revisions, err := utils.ListRevisions(ctx, r.client, sts, selector)
+	if err != nil {
+		return nil, err
+	}
+	return utils.GetHighestRevision(revisions), nil
+}
+
 func SemanticallyEqualStatefulSet(sts1, sts2 *appsv1.StatefulSet) (bool, error) {
 	if sts1 == nil || sts2 == nil {
 		if sts1 != sts2 {
@@ -280,12 +522,6 @@ func SemanticallyEqualStatefulSet(sts1, sts2 *appsv1.StatefulSet) (bool, error) 
 }
 
 func statefulSetSpecEqual(spec1, spec2 appsv1.StatefulSetSpec) (bool, error) {
-	if spec1.Replicas != nil && spec2.Replicas != nil {
-		if *spec1.Replicas != *spec2.Replicas {
-			return false, fmt.Errorf("replicas not equal, old: %d, new: %d", *spec1.Replicas, *spec2.Replicas)
-		}
-	}
-
 	if !reflect.DeepEqual(spec1.Selector, spec2.Selector) {
 		return false, fmt.Errorf("selector not equal, old: %v, new: %v", spec1.Selector, spec2.Selector)
 	}
@@ -319,4 +555,28 @@ func SemanticallyEqualService(svc1, svc2 *corev1.Service) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func validateRolloutStrategy(rollingUpdate *workloadsv1alpha1.RollingUpdate, replicas int) error {
+	if rollingUpdate == nil {
+		rollingUpdate = &workloadsv1alpha1.RollingUpdate{
+			MaxUnavailable: intstr.FromInt32(1),
+			MaxSurge:       intstr.FromInt32(0),
+		}
+		return nil
+	}
+
+	maxSurge, err := intstr.GetScaledValueFromIntOrPercent(&rollingUpdate.MaxSurge, replicas, true)
+	if err != nil {
+		return err
+	}
+	maxAvailable, err := intstr.GetScaledValueFromIntOrPercent(&rollingUpdate.MaxUnavailable, replicas, false)
+	if err != nil {
+		return err
+	}
+	if maxAvailable == 0 && maxSurge == 0 {
+		return fmt.Errorf("RollingUpdate is invalid: rolloutStrategy.rollingUpdate.maxUnavailable may not be 0 when maxSurge is 0")
+	}
+
+	return nil
 }

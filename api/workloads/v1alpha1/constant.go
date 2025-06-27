@@ -25,3 +25,12 @@ const (
 
 	GroupSizeAnnotationKey string = RBGDomainPrefix + "group-size"
 )
+
+type RolloutStrategyType string
+
+const (
+	// RollingUpdateStrategyType indicates that replicas will be updated one by one(defined
+	// by RollingUpdateConfiguration), the latter one will not start the update until the
+	// former role is ready.
+	RollingUpdateStrategyType RolloutStrategyType = "RollingUpdate"
+)

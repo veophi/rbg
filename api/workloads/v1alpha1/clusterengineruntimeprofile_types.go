@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	NoUpdate      = "NoUpdate"
-	RollingUpdate = "RollingUpdate"
+	NoUpdateStrategy      = "NoUpdate"
+	RollingUpdateStrategy = "RollingUpdate"
 )
 
 // ClusterEngineRuntimeProfileSpec defines the desired state of ClusterEngineRuntimeProfile.

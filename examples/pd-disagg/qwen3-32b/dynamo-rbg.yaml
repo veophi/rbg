@@ -58,12 +58,15 @@ spec:
                 - mountPath: /workspace/examples/llm/configs/qwen3.yaml
                   name: dynamo-configs
                   subPath: qwen3.yaml
+          tolerations:
+            - key: node-role.alibabacloud.com/lingjun
+              operator: Exists
           volumes:
             - name: model
               persistentVolumeClaim:
-                claimName: llm-model-qwen3
+                claimName: llm-model
             - configMap:
-                name: dynamo-qwen3-32b
+                name: dynamo-configs
               name: dynamo-configs
     - name: prefill
       replicas: 3
@@ -73,8 +76,7 @@ spec:
             - command:
                 - sh
                 - -c
-                - cd /workspace/examples/llm; dynamo serve components.prefill_worker:PrefillWorker
-                  -f ./configs/qwen3.yaml
+                - cd /workspace/examples/llm; dynamo serve components.prefill_worker:PrefillWorker -f ./configs/qwen3.yaml
               env:
                 - name: DYNAMO_NAME
                   value: dynamo
@@ -87,7 +89,7 @@ spec:
                 - name: DYNAMO_RP_TIMEOUT
                   value: "60"
               image: <your-build-image>
-              name: prefillWorker
+              name: prefill-worker
               resources:
                 limits:
                   nvidia.com/gpu: "4"
@@ -103,16 +105,21 @@ spec:
                 - mountPath: /workspace/examples/llm/configs/qwen3.yaml
                   name: dynamo-configs
                   subPath: qwen3.yaml
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
+          tolerations:
+            - key: node-role.alibabacloud.com/lingjun
+              operator: Exists
           volumes:
             - name: model
               persistentVolumeClaim:
-                claimName: llm-model-qwen3
+                claimName: llm-model
             - emptyDir:
                 medium: Memory
                 sizeLimit: 32Gi
               name: shared-memory
             - configMap:
-                name: dynamo-qwen3-32b
+                name: dynamo-configs
               name: dynamo-configs
     - name: decoder
       replicas: 1
@@ -122,8 +129,7 @@ spec:
             - command:
                 - sh
                 - -c
-                - cd /workspace/examples/llm; dynamo serve components.worker:VllmWorker
-                  -f ./configs/qwen3.yaml --service-name VllmWorker
+                - cd /workspace/examples/llm; dynamo serve components.worker:VllmWorker -f ./configs/qwen3.yaml --service-name VllmWorker
               env:
                 - name: DYNAMO_NAME
                   value: dynamo
@@ -136,7 +142,7 @@ spec:
                 - name: DYNAMO_RP_TIMEOUT
                   value: "60"
               image: <your-build-image>
-              name: vllmServer
+              name: vllm-worker
               resources:
                 limits:
                   nvidia.com/gpu: "4"
@@ -152,16 +158,21 @@ spec:
                 - mountPath: /workspace/examples/llm/configs/qwen3.yaml
                   name: dynamo-configs
                   subPath: qwen3.yaml
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
+          tolerations:
+            - key: node-role.alibabacloud.com/lingjun
+              operator: Exists
           volumes:
             - name: model
               persistentVolumeClaim:
-                claimName: llm-model-qwen3
+                claimName: llm-model
             - emptyDir:
                 medium: Memory
                 sizeLimit: 32Gi
               name: shared-memory
             - configMap:
-                name: dynamo-qwen3-32b
+                name: dynamo-configs
               name: dynamo-configs
 ---
 apiVersion: v1

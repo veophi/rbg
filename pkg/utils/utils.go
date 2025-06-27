@@ -108,3 +108,10 @@ func DumpJSON(o interface{}) string {
 	j, _ := json.Marshal(o)
 	return string(j)
 }
+
+func NonZeroValue(value int32) int32 {
+	if value < 0 {
+		return 0
+	}
+	return value
+}

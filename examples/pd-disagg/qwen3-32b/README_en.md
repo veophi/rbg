@@ -15,7 +15,7 @@
    2. Create an Object Storage Service (OSS) directory and upload the model files to the directory.
    ```shell
    ossutil mkdir oss://<your-bucket-name>/models/Qwen3-32B
-   ossutil cp -r ./Qwen3-32B oss://<your-bucket-name>/models/DeepSeek-R1-Distill-Qwen-7B
+   ossutil cp -r ./Qwen3-32B oss://<your-bucket-name>/models/Qwen3-32B
    ```
    3. Create a persistent volume (PV) and a persistent volume claim (PVC). Create a PV named llm-model and a PVC in the cluster. 
    ```shell

@@ -96,6 +96,16 @@ func (r *DeploymentReconciler) constructDeployApplyConfiguration(
 			WithBlockOwnerDeletion(true).
 			WithController(true),
 		)
+	if role.RolloutStrategy.RollingUpdate != nil {
+		deployConfig = deployConfig.WithSpec(
+			deployConfig.Spec.WithStrategy(appsapplyv1.DeploymentStrategy().
+				WithType(appsv1.DeploymentStrategyType(role.RolloutStrategy.Type)).
+				WithRollingUpdate(appsapplyv1.RollingUpdateDeployment().
+					WithMaxSurge(role.RolloutStrategy.RollingUpdate.MaxSurge).
+					WithMaxUnavailable(role.RolloutStrategy.RollingUpdate.MaxUnavailable),
+				),
+			))
+	}
 	return deployConfig, nil
 
 }

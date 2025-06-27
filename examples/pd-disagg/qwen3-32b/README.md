@@ -14,7 +14,7 @@
    2. 在OSS中创建目录，将模型上传至OSS。
    ```shell
    ossutil mkdir oss://<your-bucket-name>/models/Qwen3-32B
-   ossutil cp -r ./Qwen3-32B oss://<your-bucket-name>/models/DeepSeek-R1-Distill-Qwen-7B
+   ossutil cp -r ./Qwen3-32B oss://<your-bucket-name>/models/Qwen3-32B
    ```
    3. 创建PV和PVC。为目标集群配置名为llm-model的存储卷PV和存储声明PVC。
    ```shell

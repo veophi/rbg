@@ -19,15 +19,19 @@ package workloads
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/errors"
+	"reflect"
+	lwsv1 "sigs.k8s.io/lws/api/leaderworkerset/v1"
+
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,7 +39,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	lwsv1 "sigs.k8s.io/lws/api/leaderworkerset/v1"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/dependency"
 	"sigs.k8s.io/rbgs/pkg/reconciler"
@@ -151,27 +154,23 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 }
 
 func (r *RoleBasedGroupReconciler) deleteRoles(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup) error {
-	workloadRecons := make(map[string]reconciler.WorkloadReconciler)
-	for _, role := range rbg.Spec.Roles {
-		key := fmt.Sprintf("%s-%s", role.Workload.APIVersion, role.Workload.Kind)
-		if _, ok := workloadRecons[key]; ok {
-			continue
-		} else {
-			recon, err := reconciler.NewWorkloadReconciler(role.Workload.APIVersion, role.Workload.Kind, r.scheme, r.client)
-			if err != nil {
-				return err
-			}
-			workloadRecons[key] = recon
-		}
+	errs := make([]error, 0)
+	deployRecon := reconciler.NewDeploymentReconciler(r.scheme, r.client)
+	if err := deployRecon.CleanupOrphanedWorkloads(ctx, rbg); err != nil {
+		errs = append(errs, err)
 	}
 
-	for _, recon := range workloadRecons {
-		if err := recon.CleanupOrphanedWorkloads(ctx, rbg); err != nil {
-			return err
-		}
+	stsRecon := reconciler.NewDeploymentReconciler(r.scheme, r.client)
+	if err := stsRecon.CleanupOrphanedWorkloads(ctx, rbg); err != nil {
+		errs = append(errs, err)
 	}
 
-	return nil
+	lwsRecon := reconciler.NewLeaderWorkerSetReconciler(r.scheme, r.client)
+	if err := lwsRecon.CleanupOrphanedWorkloads(ctx, rbg); err != nil {
+		errs = append(errs, err)
+	}
+
+	return errors.NewAggregate(errs)
 }
 
 func (r *RoleBasedGroupReconciler) updateConditions(roleStatus []workloadsv1alpha1.RoleStatus) metav1.Condition {
