@@ -7,8 +7,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	utilpointer "k8s.io/utils/pointer"
 	lwsv1 "sigs.k8s.io/lws/api/leaderworkerset/v1"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
@@ -16,8 +14,6 @@ import (
 )
 
 var (
-	scheme *runtime.Scheme
-
 	defaultPodTemplate = corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-pod-1",
@@ -178,13 +174,6 @@ var (
 		},
 	}
 )
-
-func init() {
-	scheme = runtime.NewScheme()
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(workloadsv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(lwsv1.AddToScheme(scheme))
-}
 
 func TestPatchPodTemplate(t *testing.T) {
 	cases := []struct {

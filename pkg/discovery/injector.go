@@ -3,6 +3,7 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -147,20 +148,23 @@ func (i *DefaultInjector) InjectEnv(ctx context.Context, podSpec *corev1.PodTemp
 
 	for idx := range podSpec.Spec.Containers {
 		container := &podSpec.Spec.Containers[idx]
-		// 1. 将现有环境变量转为 Map 去重
+		// 1. Convert env to Map to remove duplicates
 		existingEnv := make(map[string]corev1.EnvVar)
 		for _, e := range container.Env {
 			existingEnv[e.Name] = e
 		}
-		// 2. 合并新环境变量（同名覆盖）
 		for _, newEnv := range envVars {
-			existingEnv[newEnv.Name] = newEnv // 新变量覆盖旧值
+			existingEnv[newEnv.Name] = newEnv // Overwrite env.Value if the name exists
 		}
-		// 3. 将 Map 转换回 Slice
+		// 2. Convert back to slice
 		mergedEnv := make([]corev1.EnvVar, 0, len(existingEnv))
 		for _, env := range existingEnv {
 			mergedEnv = append(mergedEnv, env)
 		}
+		// Avoid sts updates caused by env order changes
+		sort.Slice(mergedEnv, func(i, j int) bool {
+			return mergedEnv[i].Name < mergedEnv[j].Name
+		})
 		container.Env = mergedEnv
 	}
 	return nil

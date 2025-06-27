@@ -173,13 +173,19 @@ func (r *LeaderWorkerSetReconciler) constructLWSApplyConfiguration(ctx context.C
 	if role.Replicas == nil {
 		role.Replicas = utilpointer.Int32(1)
 	}
-	lwsSpecConfig := lwsapplyv1.LeaderWorkerSetSpec().WithReplicas(*role.Replicas).WithLeaderWorkerTemplate(
-		lwsapplyv1.LeaderWorkerTemplate().
-			WithLeaderTemplate(leaderTemplateApplyCfg).
-			WithWorkerTemplate(workerTemplateApplyCfg).
-			WithSize(*role.LeaderWorkerSet.Size).
-			WithRestartPolicy(defaultRestartPolicyType),
-	)
+	lwsSpecConfig := lwsapplyv1.LeaderWorkerSetSpec().WithReplicas(*role.Replicas).
+		WithRolloutStrategy(lwsapplyv1.RolloutStrategy().WithRollingUpdateConfiguration(
+			lwsapplyv1.RollingUpdateConfiguration().
+				WithMaxSurge(role.RolloutStrategy.RollingUpdate.MaxSurge).
+				WithMaxUnavailable(role.RolloutStrategy.RollingUpdate.MaxUnavailable),
+		)).
+		WithLeaderWorkerTemplate(
+			lwsapplyv1.LeaderWorkerTemplate().
+				WithLeaderTemplate(leaderTemplateApplyCfg).
+				WithWorkerTemplate(workerTemplateApplyCfg).
+				WithSize(*role.LeaderWorkerSet.Size).
+				WithRestartPolicy(defaultRestartPolicyType),
+		)
 
 	// construct lws apply configuration
 	lwsConfig := lwsapplyv1.LeaderWorkerSet(rbg.GetWorkloadName(role), rbg.Namespace).
