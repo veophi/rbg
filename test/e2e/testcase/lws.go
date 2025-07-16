@@ -22,6 +22,7 @@ func RunLeaderWorkerSetWorkloadTestCases(f *framework.Framework) {
 				Obj(),
 		}).Obj()
 
+		gomega.Expect(testutils.CreatePatioRuntime(f.Ctx, f.Client)).Should(gomega.Succeed())
 		gomega.Expect(f.Client.Create(f.Ctx, rbg)).Should(gomega.Succeed())
 		f.ExpectRbgEqual(rbg)
 	})
