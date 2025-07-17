@@ -102,15 +102,16 @@ func (r *RoleBasedGroupScalingAdapterReconciler) Reconcile(ctx context.Context, 
 	// check scale target exist failed, update phase to unbound
 	if getTargetRoleErr != nil {
 		r.recorder.Eventf(rbgScalingAdapter, corev1.EventTypeNormal, FailedGetRBGRole,
-			"Failed to get scale target role: %v", err)
+			"Failed to get scale target role: %v", getTargetRoleErr)
 		if rbgScalingAdapter.Status.Phase != workloadsv1alpha1.AdapterPhaseNotBound {
-			rbgApplyConfig := utils.RoleBasedGroupScalingAdapter(rbgScalingAdapter).
+			rbgScalingAdapterApplyConfig := utils.RoleBasedGroupScalingAdapter(rbgScalingAdapter).
 				WithStatus(utils.RbgScalingAdapterStatus(rbgScalingAdapter.Status).WithPhase(workloadsv1alpha1.AdapterPhaseNotBound))
-			if err := utils.PatchObjectApplyConfiguration(ctx, r.client, rbgApplyConfig, utils.PatchStatus); err != nil {
+			if err := utils.PatchObjectApplyConfiguration(ctx, r.client, rbgScalingAdapterApplyConfig, utils.PatchStatus); err != nil {
 				logger.Error(err, "Failed to update status for %s", rbgScalingAdapterName)
 			}
 		}
-		return ctrl.Result{}, err
+		// TODO: currently reconcile unbound adapter by a default reconcile interval, need to implement a rbg event-driven manager
+		return ctrl.Result{RequeueAfter: 10}, nil
 	}
 
 	// add owner reference
@@ -146,7 +147,7 @@ func (r *RoleBasedGroupScalingAdapterReconciler) Reconcile(ctx context.Context, 
 			return ctrl.Result{}, err
 		}
 		r.recorder.Eventf(rbgScalingAdapter, corev1.EventTypeNormal, SuccessfulBound,
-			"Succeed to find scale target ref role %s of rbg %s", targetRoleName, rbgName)
+			"Succeed to find scale target role [%s] of rbg [%s]", targetRoleName, rbgName)
 		return ctrl.Result{RequeueAfter: 1}, nil
 	}
 
@@ -162,18 +163,20 @@ func (r *RoleBasedGroupScalingAdapterReconciler) Reconcile(ctx context.Context, 
 	// scale role
 	if err := r.updateRoleReplicas(ctx, rbg, targetRoleName, desiredReplicas); err != nil {
 		r.recorder.Eventf(rbgScalingAdapter, corev1.EventTypeNormal, FailedScale,
-			"Failed to scale target role %s of rbg %s from %v to %v replicas: %v",
+			"Failed to scale target role [%s] of rbg [%s] from %v to %v replicas: %v",
 			targetRoleName, rbgName, *currentReplicas, *desiredReplicas, err)
 		return ctrl.Result{}, err
 	}
-	rbgApplyConfig := utils.RoleBasedGroupScalingAdapter(rbgScalingAdapter).
+	rbgScalingAdapterApplyConfig := utils.RoleBasedGroupScalingAdapter(rbgScalingAdapter).
 		WithStatus(utils.RbgScalingAdapterStatus(rbgScalingAdapter.Status).WithReplicas(desiredReplicas, true))
-	if err := utils.PatchObjectApplyConfiguration(ctx, r.client, rbgApplyConfig, utils.PatchStatus); err != nil {
+	if err := utils.PatchObjectApplyConfiguration(ctx, r.client, rbgScalingAdapterApplyConfig, utils.PatchStatus); err != nil {
 		logger.Error(err, "Failed to update status for %s", rbgScalingAdapterName)
 		return ctrl.Result{}, err
 	}
+
+	logger.Info("Scale successfully", "old replicas", *desiredReplicas, "new replicas", *currentReplicas)
 	r.recorder.Eventf(rbgScalingAdapter, corev1.EventTypeNormal, SuccessfulScale,
-		"Succeed to scale target role %s of rbg %s from %v to %v replicas",
+		"Succeed to scale target role [%s] of rbg [%s] from %v to %v replicas",
 		targetRoleName, rbgName, *currentReplicas, *desiredReplicas)
 
 	return ctrl.Result{}, nil
