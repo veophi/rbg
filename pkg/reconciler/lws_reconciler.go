@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
@@ -23,10 +23,6 @@ import (
 	lwsapplyv1 "sigs.k8s.io/lws/client-go/applyconfiguration/leaderworkerset/v1"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/utils"
-)
-
-const (
-	LwsCrdName = "leaderworkersets.leaderworkerset.x-k8s.io"
 )
 
 type LeaderWorkerSetReconciler struct {
@@ -111,7 +107,7 @@ func (r *LeaderWorkerSetReconciler) CheckWorkloadReady(ctx context.Context, rbg 
 
 func (r *LeaderWorkerSetReconciler) CleanupOrphanedWorkloads(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup) error {
 	logger := log.FromContext(ctx)
-	err := utils.CheckCrdExists(r.client, LwsCrdName)
+	err := utils.CheckCrdExists(r.client, utils.LwsCrdName)
 	if err != nil {
 		logger.Info(fmt.Sprintf("LeaderWorkerSetReconciler CleanupOrphanedWorkloads check lws crd failed: %s", err.Error()))
 		return nil

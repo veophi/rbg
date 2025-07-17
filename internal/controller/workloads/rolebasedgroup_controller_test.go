@@ -40,8 +40,6 @@ func TestRoleBasedGroupReconciler_CheckCrdExists(t *testing.T) {
 	_ = apiextensionsv1.AddToScheme(testScheme)
 
 	// Target CRD name according to Kubernetes naming convention
-	rbgCRDName := "rolebasedgroups.workloads.x-k8s.io"
-	runtimeCRDName := "clusterengineruntimeprofiles.workloads.x-k8s.io"
 
 	type fields struct {
 		apiReader client.Reader
@@ -58,7 +56,7 @@ func TestRoleBasedGroupReconciler_CheckCrdExists(t *testing.T) {
 				apiReader: fake.NewClientBuilder().
 					WithScheme(testScheme).
 					WithObjects(&apiextensionsv1.CustomResourceDefinition{
-						ObjectMeta: metav1.ObjectMeta{Name: rbgCRDName},
+						ObjectMeta: metav1.ObjectMeta{Name: utils.RbgCRDName},
 						Status: apiextensionsv1.CustomResourceDefinitionStatus{
 							Conditions: []apiextensionsv1.CustomResourceDefinitionCondition{
 								{
@@ -69,7 +67,7 @@ func TestRoleBasedGroupReconciler_CheckCrdExists(t *testing.T) {
 						},
 					}).
 					WithObjects(&apiextensionsv1.CustomResourceDefinition{
-						ObjectMeta: metav1.ObjectMeta{Name: runtimeCRDName},
+						ObjectMeta: metav1.ObjectMeta{Name: utils.RuntimeCRDName},
 						Status: apiextensionsv1.CustomResourceDefinitionStatus{
 							Conditions: []apiextensionsv1.CustomResourceDefinitionCondition{
 								{
@@ -98,7 +96,7 @@ func TestRoleBasedGroupReconciler_CheckCrdExists(t *testing.T) {
 				apiReader: fake.NewClientBuilder().
 					WithScheme(testScheme).
 					WithObjects(&apiextensionsv1.CustomResourceDefinition{
-						ObjectMeta: metav1.ObjectMeta{Name: rbgCRDName},
+						ObjectMeta: metav1.ObjectMeta{Name: utils.RbgCRDName},
 						Status: apiextensionsv1.CustomResourceDefinitionStatus{
 							Conditions: []apiextensionsv1.CustomResourceDefinitionCondition{
 								{
@@ -109,7 +107,7 @@ func TestRoleBasedGroupReconciler_CheckCrdExists(t *testing.T) {
 						},
 					}).
 					WithObjects(&apiextensionsv1.CustomResourceDefinition{
-						ObjectMeta: metav1.ObjectMeta{Name: runtimeCRDName},
+						ObjectMeta: metav1.ObjectMeta{Name: utils.RuntimeCRDName},
 						Status: apiextensionsv1.CustomResourceDefinitionStatus{
 							Conditions: []apiextensionsv1.CustomResourceDefinitionCondition{
 								{
@@ -141,7 +139,7 @@ func TestRoleBasedGroupReconciler_CheckCrdExists(t *testing.T) {
 							Group:    "apiextensions.k8s.io",
 							Resource: "customresourcedefinitions",
 						},
-						rbgCRDName,
+						utils.RbgCRDName,
 						errors.New("permission denied"),
 					),
 				),
