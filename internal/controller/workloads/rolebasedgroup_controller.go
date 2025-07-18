@@ -19,10 +19,7 @@ package workloads
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"reflect"
-	"sigs.k8s.io/rbgs/pkg/scheduler"
-	schev1alpha1 "sigs.k8s.io/scheduler-plugins/apis/scheduling/v1alpha1"
 	"sync"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -30,6 +27,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/tools/record"
@@ -46,7 +44,9 @@ import (
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/dependency"
 	"sigs.k8s.io/rbgs/pkg/reconciler"
+	"sigs.k8s.io/rbgs/pkg/scheduler"
 	"sigs.k8s.io/rbgs/pkg/utils"
+	schev1alpha1 "sigs.k8s.io/scheduler-plugins/apis/scheduling/v1alpha1"
 )
 
 var (
@@ -102,12 +102,26 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
+	// watch podGroup
+	_, podGroupExist := watchedWorkload.Load(utils.PodGroupCrdName)
+	if rbg.EnableGangScheduling() && !podGroupExist {
+		err = utils.CheckCrdExists(r.apiReader, utils.PodGroupCrdName)
+		if err == nil {
+			watchedWorkload.LoadOrStore(utils.PodGroupCrdName, struct{}{})
+			runtimeController.Owns(&schev1alpha1.PodGroup{})
+			logger.Info("rbgs controller watch PodGroup CRD")
+			podGroupExist = true
+		} else {
+			logger.Error(err, "failed watch PodGroup CRD")
+		}
+	}
 	// Process PodGroup
-
-	podGroupManager := scheduler.NewPodGroupScheduler(r.client)
-	if err := podGroupManager.Reconcile(ctx, rbg); err != nil {
-		r.recorder.Event(rbg, corev1.EventTypeWarning, FailedCreatePodGroup, err.Error())
-		return ctrl.Result{}, err
+	if podGroupExist {
+		podGroupManager := scheduler.NewPodGroupScheduler(r.client)
+		if err := podGroupManager.Reconcile(ctx, rbg); err != nil {
+			r.recorder.Event(rbg, corev1.EventTypeWarning, FailedCreatePodGroup, err.Error())
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Reconcile role, add & update
@@ -118,7 +132,7 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		roleCtx := log.IntoContext(ctx, logger.WithValues("role", role.Name))
 
 		// first check whether watch lws cr
-		dynamicWatchCustomCRD(roleCtx, role.Workload)
+		dynamicWatchCustomCRD(roleCtx, role.Workload.Kind)
 		// Check dependencies first
 		ready, err := dependencyManager.CheckDependencyReady(roleCtx, rbg, role)
 		if err != nil {
@@ -260,13 +274,17 @@ func (r *RoleBasedGroupReconciler) SetupWithManager(mgr ctrl.Manager, options co
 		Owns(&appsv1.StatefulSet{}, builder.WithPredicates(WorkloadPredicate())).
 		Owns(&appsv1.Deployment{}, builder.WithPredicates(WorkloadPredicate())).
 		Owns(&corev1.Service{}).
-		Owns(&schev1alpha1.PodGroup{}).
 		Named("workloads-rolebasedgroup")
 
-	err := utils.CheckCrdExists(r.apiReader, reconciler.LwsCrdName)
+	err := utils.CheckCrdExists(r.apiReader, utils.LwsCrdName)
 	if err == nil {
-		watchedWorkload.LoadOrStore(reconciler.LwsCrdName, struct{}{})
+		watchedWorkload.LoadOrStore(utils.LwsCrdName, struct{}{})
 		runtimeController.Owns(&lwsv1.LeaderWorkerSet{}, builder.WithPredicates(WorkloadPredicate()))
+	}
+	err = utils.CheckCrdExists(r.apiReader, utils.PodGroupCrdName)
+	if err == nil {
+		watchedWorkload.LoadOrStore(utils.PodGroupCrdName, struct{}{})
+		runtimeController.Owns(&schev1alpha1.PodGroup{})
 	}
 
 	return runtimeController.Complete(r)
@@ -389,13 +407,13 @@ func getLwsGVK() schema.GroupVersionKind {
 	return schema.FromAPIVersionAndKind(lwsv1.GroupVersion.String(), "LeaderWorkerSet")
 }
 
-func dynamicWatchCustomCRD(ctx context.Context, workload workloadsv1alpha1.WorkloadSpec) {
+func dynamicWatchCustomCRD(ctx context.Context, kind string) {
 	logger := log.FromContext(ctx)
-	switch workload.Kind {
+	switch kind {
 	case getLwsGVK().Kind:
-		_, lwsExist := watchedWorkload.Load(reconciler.LwsCrdName)
+		_, lwsExist := watchedWorkload.Load(utils.LwsCrdName)
 		if !lwsExist {
-			watchedWorkload.LoadOrStore(reconciler.LwsCrdName, struct{}{})
+			watchedWorkload.LoadOrStore(utils.LwsCrdName, struct{}{})
 			runtimeController.Owns(&lwsv1.LeaderWorkerSet{}, builder.WithPredicates(WorkloadPredicate()))
 			logger.Info("rbgs controller watch LeaderWorkerSet CRD")
 		}
