@@ -103,6 +103,13 @@ func (roleWrapper *RoleWrapper) WithLeaderWorkerTemplate(leaderPatch, workerPatc
 	return roleWrapper
 }
 
+func (roleWrapper *RoleWrapper) WithScalingAdapter(enable bool) *RoleWrapper {
+	roleWrapper.ScalingAdapter = &workloadsv1alpha.ScalingAdapter{
+		Enable: enable,
+	}
+	return roleWrapper
+}
+
 func BuildBasicRole(name string) *RoleWrapper {
 	return &RoleWrapper{
 		workloadsv1alpha.RoleSpec{

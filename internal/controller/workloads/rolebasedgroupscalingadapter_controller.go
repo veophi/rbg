@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
+	"sigs.k8s.io/rbgs/pkg/scale"
 	"sigs.k8s.io/rbgs/pkg/utils"
 )
 
@@ -71,15 +72,15 @@ func (r *RoleBasedGroupScalingAdapterReconciler) Reconcile(ctx context.Context, 
 	if err := r.client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, rbgScalingAdapter); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	logger := log.FromContext(ctx).WithValues("rbg-scaling-adapter", klog.KObj(rbgScalingAdapter))
+	ctx = ctrl.LoggerInto(ctx, logger)
+
 	// TODO: this adapter's lifecycle is binding to RBG object to make it easy to management.
 	if rbgScalingAdapter.DeletionTimestamp != nil {
 		return ctrl.Result{}, nil
 	}
 
-	logger := log.FromContext(ctx).WithValues("rbg-scaling-adapter", klog.KObj(rbgScalingAdapter))
-	ctx = ctrl.LoggerInto(ctx, logger)
 	logger.Info("Start reconciling")
-
 	rbgScalingAdapterName := rbgScalingAdapter.Name
 	rbgName := rbgScalingAdapter.Spec.ScaleTargetRef.Name
 	targetRoleName := rbgScalingAdapter.Spec.ScaleTargetRef.Role
@@ -97,6 +98,11 @@ func (r *RoleBasedGroupScalingAdapterReconciler) Reconcile(ctx context.Context, 
 		if err != nil {
 			getTargetRoleErr = errors.Wrapf(err, "Failed to get role %s in rbg %s:", targetRoleName, rbgName)
 		}
+	}
+
+	if !scale.IsScalingAdapterManagedByRBG(rbgScalingAdapter, rbg) {
+		logger.Info("Skip to reconcile the scaling adapter which is not managed by RBG-controller", "rbgScalingAdapterName", rbgScalingAdapter.Name)
+		return ctrl.Result{}, nil
 	}
 
 	// check scale target exist failed, update phase to unbound

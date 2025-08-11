@@ -152,6 +152,9 @@ type RoleSpec struct {
 
 	// +optional
 	EngineRuntimes []EngineRuntime `json:"engineRuntimes,omitempty"`
+
+	// +optional
+	ScalingAdapter *ScalingAdapter `json:"scalingAdapter,omitempty"`
 }
 
 type WorkloadSpec struct {
@@ -202,6 +205,13 @@ type LeaderWorkerTemplate struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
 	PatchWorkerTemplate runtime.RawExtension `json:"patchWorkerTemplate,omitempty"`
+}
+
+type ScalingAdapter struct {
+	// Enable indicates whether the ScalingAdapter is enabled for the Role.
+	// +optional
+	// +kubebuilder:default=false
+	Enable bool `json:"enable,omitempty"`
 }
 
 // RoleBasedGroupStatus defines the observed state of RoleBasedGroup.

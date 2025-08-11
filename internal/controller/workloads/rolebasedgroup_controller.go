@@ -44,6 +44,7 @@ import (
 	workloadsv1alpha1 "sigs.k8s.io/rbgs/api/workloads/v1alpha1"
 	"sigs.k8s.io/rbgs/pkg/dependency"
 	"sigs.k8s.io/rbgs/pkg/reconciler"
+	"sigs.k8s.io/rbgs/pkg/scale"
 	"sigs.k8s.io/rbgs/pkg/scheduler"
 	"sigs.k8s.io/rbgs/pkg/utils"
 	schev1alpha1 "sigs.k8s.io/scheduler-plugins/apis/scheduling/v1alpha1"
@@ -158,6 +159,13 @@ func (r *RoleBasedGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, err
 		}
 
+		if err := r.ReconcileScalingAdapter(roleCtx, rbg, role); err != nil {
+			logger.Error(err, "Failed to reconcile scaling adapter")
+			r.recorder.Eventf(rbg, corev1.EventTypeWarning, FailedCreateScalingAdapter,
+				"Failed to reconcile scaling adapter for role %s: %v", role.Name, err)
+			return ctrl.Result{}, err
+		}
+
 		roleStatus, updateRoleStatus, err := reconciler.ConstructRoleStatus(roleCtx, rbg, role)
 		if err != nil {
 			if !apierrors.IsNotFound(err) {
@@ -203,6 +211,10 @@ func (r *RoleBasedGroupReconciler) deleteRoles(ctx context.Context, rbg *workloa
 
 	lwsRecon := reconciler.NewLeaderWorkerSetReconciler(r.scheme, r.client)
 	if err := lwsRecon.CleanupOrphanedWorkloads(ctx, rbg); err != nil {
+		errs = append(errs, err)
+	}
+
+	if err := r.CleanupOrphanedScalingAdapters(ctx, rbg); err != nil {
 		errs = append(errs, err)
 	}
 
@@ -264,6 +276,97 @@ func (r *RoleBasedGroupReconciler) updateRBGStatus(ctx context.Context, rbg *wor
 
 	return utils.PatchObjectApplyConfiguration(ctx, r.client, rbgApplyConfig, utils.PatchStatus)
 
+}
+
+func (r *RoleBasedGroupReconciler) ReconcileScalingAdapter(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup, roleSpec *workloadsv1alpha1.RoleSpec) error {
+	logger := log.FromContext(ctx)
+	roleName := roleSpec.Name
+	roleScalingAdapterName := scale.GenerateScalingAdapterName(rbg.Name, roleName)
+	rbgScalingAdapter := &workloadsv1alpha1.RoleBasedGroupScalingAdapter{}
+	err := r.client.Get(ctx, types.NamespacedName{Name: roleScalingAdapterName, Namespace: rbg.Namespace}, rbgScalingAdapter)
+	if err == nil {
+		// scalingAdapter exists
+		// clean scalingAdapter when user update rbg.spec.role.scalingAdapter.enable to false
+		if !scale.IsScalingAdapterEnable(roleSpec) {
+			logger.Info("delete scalingAdapter", "scalingAdapter", rbgScalingAdapter.Name)
+			return r.client.Delete(ctx, rbgScalingAdapter)
+		}
+		return nil
+	} else if !apierrors.IsNotFound(err) {
+		// failed to check scaling adapter exists
+		return err
+	}
+	if !scale.IsScalingAdapterEnable(roleSpec) {
+		return nil
+	}
+
+	// scalingAdapter not found
+	blockOwnerDeletion := true
+	rbgScalingAdapter = &workloadsv1alpha1.RoleBasedGroupScalingAdapter{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      roleScalingAdapterName,
+			Namespace: rbg.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion:         rbg.APIVersion,
+					Kind:               rbg.Kind,
+					Name:               rbg.Name,
+					UID:                rbg.UID,
+					BlockOwnerDeletion: &blockOwnerDeletion,
+				},
+			},
+			Labels: map[string]string{
+				workloadsv1alpha1.SetNameLabelKey: rbg.Name,
+				workloadsv1alpha1.SetRoleLabelKey: roleName,
+			},
+		},
+		Spec: workloadsv1alpha1.RoleBasedGroupScalingAdapterSpec{
+			ScaleTargetRef: &workloadsv1alpha1.AdapterScaleTargetRef{
+				Name: rbg.Name,
+				Role: roleName,
+			},
+		},
+	}
+
+	return r.client.Create(ctx, rbgScalingAdapter)
+}
+
+func (r *RoleBasedGroupReconciler) CleanupOrphanedScalingAdapters(ctx context.Context, rbg *workloadsv1alpha1.RoleBasedGroup) error {
+	logger := log.FromContext(ctx)
+	// list scalingAdapter managed by rbg
+	scalingAdapterList := &workloadsv1alpha1.RoleBasedGroupScalingAdapterList{}
+	if err := r.client.List(context.Background(), scalingAdapterList, client.InNamespace(rbg.Namespace),
+		client.MatchingLabels(map[string]string{
+			workloadsv1alpha1.SetNameLabelKey: rbg.Name,
+		}),
+	); err != nil {
+		return err
+	}
+
+	for _, scalingAdapter := range scalingAdapterList.Items {
+		if !scale.IsScalingAdapterManagedByRBG(&scalingAdapter, rbg) {
+			continue
+		}
+		scaleTargetRef := scalingAdapter.Spec.ScaleTargetRef
+		if scaleTargetRef == nil || scaleTargetRef.Name != rbg.Name {
+			continue
+		}
+
+		found := false
+		for _, role := range rbg.Spec.Roles {
+			if role.Name == scaleTargetRef.Role {
+				found = true
+				break
+			}
+		}
+		if !found {
+			logger.Info("delete scalingAdapter", "scalingAdapter", scalingAdapter.Name)
+			if err := r.client.Delete(ctx, &scalingAdapter); err != nil {
+				return fmt.Errorf("delete scalingAdapter %s error: %s", scalingAdapter.Name, err.Error())
+			}
+		}
+	}
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

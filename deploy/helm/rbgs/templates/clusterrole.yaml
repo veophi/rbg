@@ -16,12 +16,23 @@ rules:
     resources:
       - rolebasedgroupsets
       - rolebasedgroups
-      - rolebasedgroupscalingadapters
       - clusterengineruntimeprofiles
     verbs:
       - get
       - list
       - watch
+      - update
+      - patch
+  - apiGroups:
+      - workloads.x-k8s.io
+    resources:
+      - rolebasedgroupscalingadapters
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
       - update
       - patch
   - apiGroups:
