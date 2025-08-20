@@ -43,6 +43,7 @@ func TestE2E(t *testing.T) {
 
 	ginkgo.Describe("Run role based controller e2e tests", func() {
 		testcase.RunRbgControllerTestCases(f)
+		testcase.RunRbgScalingAdapterControllerTestCases(f)
 		testcase.RunDeploymentWorkloadTestCases(f)
 		testcase.RunStatefulSetWorkloadTestCases(f)
 		testcase.RunLeaderWorkerSetWorkloadTestCases(f)

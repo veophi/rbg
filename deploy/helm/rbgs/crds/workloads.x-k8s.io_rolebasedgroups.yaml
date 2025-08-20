@@ -1454,6 +1454,14 @@ spec:
                       required:
                       - type
                       type: object
+                    scalingAdapter:
+                      properties:
+                        enable:
+                          default: false
+                          description: Enable indicates whether the ScalingAdapter
+                            is enabled for the Role.
+                          type: boolean
+                      type: object
                     servicePorts:
                       items:
                         description: ServicePort contains information on service's

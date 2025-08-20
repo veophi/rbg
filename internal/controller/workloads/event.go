@@ -2,13 +2,14 @@ package workloads
 
 // rbg-controller events
 const (
-	FailedGetRBG              = "FailedGetRBG"
-	InvalidRoleDependency     = "InvalidRoleDependency"
-	FailedCheckRoleDependency = "FailedCheckRoleDependency"
-	FailedReconcileWorkload   = "FailedReconcileWorkload"
-	Succeed                   = "Succeed"
-	FailedUpdateStatus        = "FailedUpdateStatus"
-	FailedCreatePodGroup      = "FailedCreatePodGroup"
+	FailedGetRBG               = "FailedGetRBG"
+	InvalidRoleDependency      = "InvalidRoleDependency"
+	FailedCheckRoleDependency  = "FailedCheckRoleDependency"
+	FailedReconcileWorkload    = "FailedReconcileWorkload"
+	FailedCreateScalingAdapter = "FailedCreateScalingAdapter"
+	Succeed                    = "Succeed"
+	FailedUpdateStatus         = "FailedUpdateStatus"
+	FailedCreatePodGroup       = "FailedCreatePodGroup"
 )
 
 // rbg-scaling-adapter events
