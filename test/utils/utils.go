@@ -126,6 +126,28 @@ func UpdateRbg(ctx context.Context, rclient client.Client, rbg *workloadsv1alpha
 	}, Timeout, Interval).Should(gomega.BeTrue())
 }
 
+func UpdateRbgSet(ctx context.Context, rclient client.Client, rbgset *workloadsv1alpha1.RoleBasedGroupSet, updateFunc func(rbgset *workloadsv1alpha1.RoleBasedGroupSet)) {
+	logger := log.FromContext(ctx)
+
+	gomega.Eventually(func() bool {
+		err := rclient.Get(ctx, client.ObjectKey{
+			Name:      rbgset.Name,
+			Namespace: rbgset.Namespace,
+		}, rbgset)
+		if err != nil {
+			logger.V(1).Error(err, "get rbg error")
+			return false
+		}
+		updateFunc(rbgset)
+
+		err = rclient.Update(ctx, rbgset)
+		if err != nil {
+			logger.V(1).Error(err, "update rbgset error")
+		}
+		return err == nil
+	}, Timeout, Interval).Should(gomega.BeTrue())
+}
+
 func MapContains(m map[string]string, key, value string) bool {
 	for k, v := range m {
 		if k == key && v == value {

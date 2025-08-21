@@ -25,6 +25,7 @@ func RunRbgControllerTestCases(f *framework.Framework) {
 					}).Obj()
 
 			gomega.Expect(f.Client.Create(f.Ctx, rbg)).Should(gomega.Succeed())
+			f.ExpectRbgEqual(rbg)
 
 			// delete rbg
 			gomega.Expect(f.Client.Delete(f.Ctx, rbg)).Should(gomega.Succeed())

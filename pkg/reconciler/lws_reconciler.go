@@ -111,7 +111,7 @@ func (r *LeaderWorkerSetReconciler) CleanupOrphanedWorkloads(ctx context.Context
 	logger := log.FromContext(ctx)
 	err := utils.CheckCrdExists(r.client, utils.LwsCrdName)
 	if err != nil {
-		logger.Info(fmt.Sprintf("LeaderWorkerSetReconciler CleanupOrphanedWorkloads check lws crd failed: %s", err.Error()))
+		logger.V(1).Info(fmt.Sprintf("LeaderWorkerSetReconciler CleanupOrphanedWorkloads check lws crd failed: %s", err.Error()))
 		return nil
 	}
 	// list lws managed by rbg

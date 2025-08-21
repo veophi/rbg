@@ -20,9 +20,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// TODO 参考deployment优化rbgs
-// ref: https://github.com/kubernetes/kubernetes/blob/83bb5d570580a3f477737fec5c24ba8fc3554264/staging/src/k8s.io/api/apps/v1/types.go
-
 // RoleBasedGroupSetSpec defines the desired state of RoleBasedGroupSet.
 type RoleBasedGroupSetSpec struct {
 	// Replicas is the number of RoleBasedGroup that will be created.
@@ -33,6 +30,12 @@ type RoleBasedGroupSetSpec struct {
 	Template RoleBasedGroupSpec `json:"template"`
 }
 
+type RoleBasedGroupSetConditionType string
+
+const (
+	RoleBasedGroupSetReady RoleBasedGroupSetConditionType = "Ready"
+)
+
 // RoleBasedGroupSetStatus defines the observed state of RoleBasedGroupSet.
 type RoleBasedGroupSetStatus struct {
 	// The generation observed by the deployment controller.
@@ -42,6 +45,9 @@ type RoleBasedGroupSetStatus struct {
 	// +optional
 	Replicas int32 `json:"replicas,omitempty" protobuf:"varint,2,opt,name=replicas"`
 
+	// +optional
+	ReadyReplicas int32 `json:"readyReplicas" protobuf:"varint,3,opt,name=readyReplicas"`
+
 	// Conditions track the condition of the rbgs
 	// +patchMergeKey=type
 	// +patchStrategy=merge
@@ -50,7 +56,9 @@ type RoleBasedGroupSetStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas
+// +kubebuilder:printcolumn:name="DESIRED",type="string",JSONPath=".status.replicas",description="desired replicas"
+// +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.readyReplicas",description="ready replicas"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:shortName={rbgs}
 
