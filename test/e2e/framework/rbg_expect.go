@@ -1,18 +1,16 @@
 package framework
 
 import (
-	"fmt"
-
 	"github.com/onsi/gomega"
-	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/rbgs/api/workloads/v1alpha1"
-	"sigs.k8s.io/rbgs/pkg/scale"
 	"sigs.k8s.io/rbgs/test/utils"
 )
+
+// rbg related
 
 func (f *Framework) ExpectRbgEqual(rbg *v1alpha1.RoleBasedGroup) {
 	logger := log.FromContext(f.Ctx).WithValues("rbg", rbg.Name)
@@ -101,81 +99,5 @@ func (f *Framework) ExpectWorkloadNotExist(rbg *v1alpha1.RoleBasedGroup, role v1
 
 	gomega.Eventually(func() bool {
 		return wlCheck.ExpectWorkloadNotExist(rbg, role) == nil
-	}, utils.Timeout, utils.Interval).Should(gomega.BeTrue())
-}
-
-func (f *Framework) ExpectRoleScalingAdapterEqual(rbg *v1alpha1.RoleBasedGroup, role v1alpha1.RoleSpec, expectedReplicas *int32) {
-	logger := log.FromContext(f.Ctx).WithValues("rbg", rbg.Name)
-
-	gomega.Eventually(func() bool {
-		rbgSa := &v1alpha1.RoleBasedGroupScalingAdapter{}
-		err := f.Client.Get(f.Ctx, client.ObjectKey{
-			Name:      scale.GenerateScalingAdapterName(rbg.Name, role.Name),
-			Namespace: rbg.Namespace,
-		}, rbgSa)
-		if err != nil {
-			if !apierrors.IsNotFound(err) {
-				logger.Error(err, "get rbg error")
-			}
-			return false
-		}
-
-		scale := &autoscalingv1.Scale{}
-		if err := f.Client.SubResource("scale").Get(f.Ctx, rbgSa, scale); err != nil {
-			logger.Info("get subresource-scale for rbg scaling adapter failed, wait next time", "reason", err.Error())
-			return false
-		}
-		if err := f.Client.Get(f.Ctx, client.ObjectKey{
-			Name:      rbg.Name,
-			Namespace: rbg.Namespace,
-		}, rbg); err != nil {
-			logger.Info("get subresource-scale for rbg scaling adapter failed, wait next time", "reason", err.Error())
-			return false
-		}
-		newRoleFound := false
-		for _, newRole := range rbg.Spec.Roles {
-			if newRole.Name == role.Name {
-				role, newRoleFound = newRole, true
-				break
-			}
-		}
-		if !newRoleFound {
-			return false
-		}
-		err = expectRbgScalingAdapterEqual(rbgSa, rbg, role, scale, expectedReplicas)
-		if err != nil {
-			logger.Info("rbgScalingAdapter not equal, wait next time", "reason", err.Error())
-		}
-		return err == nil
-	}, utils.Timeout, utils.Interval).Should(gomega.BeTrue())
-}
-
-func (f *Framework) ExpectRbgScalingAdapterEqual(rbg *v1alpha1.RoleBasedGroup) {
-	for _, role := range rbg.Spec.Roles {
-		if role.ScalingAdapter == nil || !role.ScalingAdapter.Enable {
-			f.ExpectScalingAdapterNotExist(rbg, role)
-		} else {
-			f.ExpectRoleScalingAdapterEqual(rbg, role, nil)
-		}
-	}
-}
-func (f *Framework) ExpectScalingAdapterNotExist(rbg *v1alpha1.RoleBasedGroup, role v1alpha1.RoleSpec) {
-	checkScalingAdapterNotExist := func() error {
-		rbgSa := &v1alpha1.RoleBasedGroupScalingAdapter{}
-		err := f.Client.Get(f.Ctx, client.ObjectKey{
-			Name:      scale.GenerateScalingAdapterName(rbg.Name, role.Name),
-			Namespace: rbg.Namespace,
-		}, rbgSa)
-		if err == nil {
-			return fmt.Errorf("rbg scalingAdapter still exists")
-		}
-		if !apierrors.IsNotFound(err) {
-			return err
-		}
-		return nil
-	}
-
-	gomega.Eventually(func() bool {
-		return checkScalingAdapterNotExist() == nil
 	}, utils.Timeout, utils.Interval).Should(gomega.BeTrue())
 }

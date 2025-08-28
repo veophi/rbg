@@ -47,6 +47,7 @@ func TestE2E(t *testing.T) {
 		testcase.RunDeploymentWorkloadTestCases(f)
 		testcase.RunStatefulSetWorkloadTestCases(f)
 		testcase.RunLeaderWorkerSetWorkloadTestCases(f)
+		testcase.RunRbgSetControllerTestCases(f)
 	})
 
 	ginkgo.RunSpecs(t, "run rbg e2e test")

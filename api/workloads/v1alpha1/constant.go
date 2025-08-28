@@ -2,26 +2,32 @@ package v1alpha1
 
 const (
 	ControllerName = "rolebasedgroup-controller"
-	// Domain prefix for all labels/annotations to avoid conflicts
-	RBGDomainPrefix = "rolebasedgroup.workloads.x-k8s.io/"
+
+	// RBGPrefix Domain prefix for all labels/annotations to avoid conflicts
+	RBGPrefix = "rolebasedgroup.workloads.x-k8s.io/"
 
 	// SetNameLabelKey identifies resources belonging to a specific RoleBasedGroup
 	// Value: RoleBasedGroup.metadata.name
-	SetNameLabelKey = RBGDomainPrefix + "name"
+	SetNameLabelKey = RBGPrefix + "name"
 
 	// SetRoleLabelKey identifies resources belonging to a specific role
 	// Value: RoleSpec.name from RoleBasedGroup.spec.roles[]
-	SetRoleLabelKey = RBGDomainPrefix + "role"
+	SetRoleLabelKey = RBGPrefix + "role"
 
 	// PodGroupLabelKey identifies pods belonging to a specific pod group
 	// Value: RoleBasedName
 	PodGroupLabelKey = "pod-group.scheduling.sigs.k8s.io/name"
 
-	// RevisionAnnotationKey tracks the controller revision hash for template changes
-	// Value: SHA256 hash of RoleSpec template
-	RevisionAnnotationKey = RBGDomainPrefix + "revision"
+	RoleSizeAnnotationKey string = RBGPrefix + "role-size"
 
-	RoleSizeAnnotationKey string = RBGDomainPrefix + "role-size"
+	// RBGSetPrefix rbgs prefix for all rbgs
+	RBGSetPrefix = "rolebasedgroupset.workloads.x-k8s.io/"
+
+	// SetRBGSetNameLabelKey identifies resources belonging to a specific RoleBasedGroupSet
+	SetRBGSetNameLabelKey = RBGSetPrefix + "name"
+
+	// SetRBGIndexLabelKey SetRBGIndex identifies the index of the rbg within the rbgset
+	SetRBGIndexLabelKey = RBGSetPrefix + "rbg-index"
 )
 
 type RolloutStrategyType string
