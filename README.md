@@ -1,17 +1,15 @@
 # The RoleBasedGroup API
 
+English｜[简体中文](./README-zh_CN.md)
+
 **RoleBasedGroup**: An API for orchestrating distributed workload services with multirole collaboration and automated
 service discovery. It provides a common deployment pattern of AI inference workloads, especially for disaggregated
 prefill and decode architecture.
-
----
 
 ## Latest News 🔥
 
 **[2025-07-21]** RBG v0.3.0 is released. Please check out
 the [release notes](https://github.com/AliyunContainerService/rolebasedgroup/releases) for more details.
-
----
 
 ## Overview
 
@@ -36,20 +34,18 @@ tackles the following challenges:
 - **Customizable Workload** - Support for multiple workload types (e.g. StatefulSet, Deployment, LeaderWorkerSet etc.)
   for the role.
 
----
-
 ## Architecture
 
 ![](doc/rbgs-concept.png)
-
----
 
 ## Getting Started
 
 - [Install RBG Controller](doc/install.md)
 - [Quick Start](doc/quick_start.md)
 
----
+## Documentation
+
+You can see our documentation at [docs](doc/TOC.md) for more in-depth installation and instructions for production.
 
 ## Contributing
 
@@ -66,8 +62,6 @@ You can reach the maintainers of this project at:
 ### Code of conduct
 
 Participation in the Kubernetes community is governed by the [Kubernetes Code of Conduct](doc/code-of-conduct.md).
-
----
 
 ## Acknowledgment
 

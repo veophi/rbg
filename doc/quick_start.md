@@ -25,26 +25,26 @@ one prefill step, and multiple decoding steps until termination.
 
 ![](./img/colocation.png)
 
-### Single Pod
+### Single Node
 
 When the model is small enough that a single Kubernetes Node can load all model files, you can deploy the LLM inference
 service on a single node.  
-![](./img/single-pod.jpg)
+![](./img/single-node.jpg)
 
 #### Examples
 
-- [vLLM](../examples/single-pod/vllm.yaml)
-- [SGLang](../examples/single-pod/sglang.yaml)
+- [vLLM](../examples/single-node/vllm.yaml)
+- [SGLang](../examples/single-node/sglang.yaml)
 
-### Multi Pods
+### Multi Nodes
 
 When the model is too large for a single Node to load all files, use multi-node distributed inference.
-![](./img/multi-pods.jpg)
+![](./img/multi-nodes.jpg)
 
 #### Examples
 
-- [vLLM](../examples/multi-pods/vllm.yaml)
-- [SGLang](../examples/multi-pods/sglang.yaml)
+- [vLLM](../examples/multi-nodes/vllm.yaml)
+- [SGLang](../examples/multi-nodes/sglang.yaml)
 
 ## PD Disaggregated
 
@@ -60,9 +60,3 @@ Deploying PD-disagg inference service with RBG.
 
 - [Dynamo PD-Disagg](../examples/pd-disagg/dynamo/README.md)
 - [SGLang PD-Disagg](../examples/pd-disagg/sglang/sgl.md)
-
-## Reference
-
-- [Labels, Annotations and Environment Variables](reference/variables.md)
-- [RoleBasedGroup API](reference/api.md)
-
