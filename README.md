@@ -1,66 +1,74 @@
-# The RoleBasedGroup API 
+# The RoleBasedGroup API
 
-RoleBasedGroup: An API for for orchestrating distributed workload services with multi-role collaboration and automated service discovery. It aims to address common deployment patterns of AI/ML inference workloads, especially Prefill/Decode engine disaggregation workloads (e.g. a prefill, decode, scheduler, etc.) where the LLM will be sharded and run across multiple devices on multiple nodes. 
+**RoleBasedGroup**: An API for orchestrating distributed workload services with multirole collaboration and automated
+service discovery. It provides a common deployment pattern of AI inference workloads, especially for disaggregated
+prefill and decode architecture.
 
-## 📖 Overview
+---
 
-### Background
-Traditional Kubernetes statefulset struggle with multi-role coordination in distributed stateful service scenarios. This solution addresses:
-- Startup order dependencies between roles  
-- Complex cross-role service discovery  
-- Fragmented configuration management  
+## Latest News 🔥
 
-### 🧩 Key Features
-  ✨ **Multi-role Template Spec** - Model distributed stateful workloads as unified K8s workload groups.  
-  🔗 **Role-based Startup Control** - Establish role dependencies and startup sequence for ReplicatedJobs in a RoleBasedGroup.  
-  🔍 **Auto Service Discovery** - Inject topology details via configs and env vars.  
-  ⚡ **Elastic Scaling** - Enable group/role-level scaling operations.  
-  🔄 **Atomic Rollout** - Role-level rollout/update: Upgrade entire Roles sequentially as single units (all pods in the same role updated simultaneously).  
-  🌐 **Topology-aware Placement** - Guarantee co-location of group/role pods within the same topology domain.  
-  🛑 **Atomic Failure Recovery** - Trigger full role recreation if any pod/container fails within the same group/role.  
-  🔧 **Customizable Workload** - Support for multiple workload types (e.g. StatefulSet, Deployment, etc.) for the role.  
+**[2025-07-21]** RBG v0.3.0 is released. Please check out
+the [release notes](https://github.com/AliyunContainerService/rolebasedgroup/releases) for more details.
 
-## 🏗 Conceptual Diagram
+---
+
+## Overview
+
+Kubernetes StatefulSet is ill-suited for coordinating multiple roles in distributed, stateful services. This solution
+tackles the following challenges:
+
+- Role startup-order dependencies
+- Complex, cross-role service discovery
+- Fragmented configuration management
+
+### Key Features
+
+- **Multirole Template Spec** - Model distributed stateful workloads as unified K8s workload groups.
+- **Role-based Startup Control** - Orchestrate StatefulSets by defining role dependencies and precise startup sequences
+  within a RoleBasedGroup.
+- **Auto Service Discovery** - Inject topology details via configs and env vars.
+- **Elastic Scaling** - Enable group/role-level scaling operations.
+- **Atomic Rollout** - Role-level rollout/update: Upgrade entire Roles sequentially as single units (all pods in the
+  same role updated simultaneously).
+- **Topology-aware Placement** - Guarantee co-location of group/role pods within the same topology domain.
+- **Atomic Failure Recovery** - Trigger full role recreation if any pod/container fails within the same group/role.
+- **Customizable Workload** - Support for multiple workload types (e.g. StatefulSet, Deployment, LeaderWorkerSet etc.)
+  for the role.
+
+---
+
+## Architecture
 
 ![](doc/rbgs-concept.png)
 
-## 🚀 Quick Start
+---
 
-### Install Controller
-```bash
-helm install rbgs deploy/helm/rbgs -n rbgs-system --create-namespace
-```
+## Getting Started
 
-### Minimal Example
+- [Install RBG Controller](doc/install.md)
+- [Quick Start](doc/quick_start.md)
 
-```bash
-kubectl apply -f examples/base/rbg.yaml
-```
+---
 
+## Contributing
 
-## 📚 API Documentation
-
-### Key Fields
-| Field | Type | Description |
-|-------|------|-------------|
-| `startupPolicy` | string | Startup strategy (Ordered/Parallel) |
-| `dependencies` | []string | Role dependencies list |
-| `workload` | Object | Underlying workload type (default: StatefulSet) |
-
-Full API spec: [API_REFERENCE.md]()
-
-## 🤝 Contributing
 We welcome contributions through issues and PRs! See [CONTRIBUTING.md](doc/CONTRIBUTING.md)
 
-## Community, discussion, contribution, and support
+### Community, discussion, contribution, and support
 
-Learn how to engage with the Kubernetes community on the [community page]().
+Learn how to engage with the Kubernetes community on the [community page](https://kubernetes.io/community/).
 
 You can reach the maintainers of this project at:
 
-- [Slack]()
-- [Mailing List]()
+- [Slack](https://sgl-fru7574.slack.com/archives/C098X0LQZV5)
 
 ### Code of conduct
 
 Participation in the Kubernetes community is governed by the [Kubernetes Code of Conduct](doc/code-of-conduct.md).
+
+---
+
+## Acknowledgment
+
+We learned the design and reused code from the following projects: [lws](https://github.com/kubernetes-sigs/lws)

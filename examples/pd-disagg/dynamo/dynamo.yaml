@@ -1,0 +1,172 @@
+apiVersion: workloads.x-k8s.io/v1alpha1
+kind: RoleBasedGroup
+metadata:
+  name: dynamo-pd
+  namespace: default
+spec:
+  roles:
+    - name: processor
+      replicas: 1
+      template:
+        spec:
+          containers:
+            - command:
+                - sh
+                - -c
+                - cd /workspace/examples/llm; dynamo serve graphs.pd_disagg:Frontend -f ./configs/qwen3.yaml
+              env:
+                - name: DYNAMO_NAME
+                  value: dynamo
+                - name: DYNAMO_NAMESPACE
+                  value: default
+                - name: ETCD_ENDPOINTS
+                  value: http://etcd:2379
+                - name: NATS_SERVER
+                  value: nats://nats:4222
+                - name: DYNAMO_RP_TIMEOUT
+                  value: "60"
+              image: #步骤2中所构建的Dynamo Runtime镜像地址
+              name: processor
+              ports:
+                - containerPort: 8000
+                  name: health
+                  protocol: TCP
+                - containerPort: 9345
+                  name: request
+                  protocol: TCP
+                - containerPort: 443
+                  name: api
+                  protocol: TCP
+                - containerPort: 9347
+                  name: metrics
+                  protocol: TCP
+              readinessProbe:
+                initialDelaySeconds: 30
+                periodSeconds: 30
+                tcpSocket:
+                  port: 8000
+              resources:
+                limits:
+                  cpu: "8"
+                  memory: 12Gi
+                requests:
+                  cpu: "8"
+                  memory: 12Gi
+              volumeMounts:
+                - mountPath: /models/Qwen3-32B/
+                  name: model
+                - mountPath: /workspace/examples/llm/configs/qwen3.yaml
+                  name: dynamo-configs
+                  subPath: qwen3.yaml
+                - mountPath: /workspace/examples/llm/graphs/pd_disagg.py
+                  name: dynamo-configs
+                  subPath: pd_disagg.py
+          volumes:
+            - name: model
+              persistentVolumeClaim:
+                claimName: llm-model
+            - configMap:
+                name: dynamo-configs
+              name: dynamo-configs
+    - name: prefill
+      replicas: 2
+      template:
+        spec:
+          containers:
+            - command:
+                - sh
+                - -c
+                - cd /workspace/examples/llm; dynamo serve components.prefill_worker:PrefillWorker -f ./configs/qwen3.yaml
+              env:
+                - name: DYNAMO_NAME
+                  value: dynamo
+                - name: DYNAMO_NAMESPACE
+                  value: default
+                - name: ETCD_ENDPOINTS
+                  value: http://etcd:2379
+                - name: NATS_SERVER
+                  value: nats://nats:4222
+                - name: DYNAMO_RP_TIMEOUT
+                  value: "60"
+              image: #步骤2中所构建的Dynamo Runtime镜像地址
+              name: prefill-worker
+              resources:
+                limits:
+                  cpu: "12"
+                  memory: 50Gi
+                  nvidia.com/gpu: "2"
+                requests:
+                  cpu: "12"
+                  memory: 50Gi
+                  nvidia.com/gpu: "2"
+              volumeMounts:
+                - mountPath: /models/Qwen3-32B/
+                  name: model
+                - mountPath: /workspace/examples/llm/configs/qwen3.yaml
+                  name: dynamo-configs
+                  subPath: qwen3.yaml
+          volumes:
+            - name: model
+              persistentVolumeClaim:
+                claimName: llm-model
+            - configMap:
+                name: dynamo-configs
+              name: dynamo-configs
+    - name: decoder
+      replicas: 1
+      template:
+        spec:
+          containers:
+            - command:
+                - sh
+                - -c
+                - cd /workspace/examples/llm; dynamo serve components.worker:VllmWorker -f ./configs/qwen3.yaml --service-name VllmWorker
+              env:
+                - name: DYNAMO_NAME
+                  value: dynamo
+                - name: DYNAMO_NAMESPACE
+                  value: default
+                - name: ETCD_ENDPOINTS
+                  value: http://etcd:2379
+                - name: NATS_SERVER
+                  value: nats://nats:4222
+                - name: DYNAMO_RP_TIMEOUT
+                  value: "60"
+              image: #步骤2中所构建的Dynamo Runtime镜像地址
+              name: vllm-worker
+              resources:
+                limits:
+                  cpu: "12"
+                  memory: 50Gi
+                  nvidia.com/gpu: "2"
+                requests:
+                  cpu: "12"
+                  memory: 50Gi
+                  nvidia.com/gpu: "2"
+              volumeMounts:
+                - mountPath: /models/Qwen3-32B/
+                  name: model
+                - mountPath: /workspace/examples/llm/configs/qwen3.yaml
+                  name: dynamo-configs
+                  subPath: qwen3.yaml
+          volumes:
+            - name: model
+              persistentVolumeClaim:
+                claimName: llm-model
+            - configMap:
+                name: dynamo-configs
+              name: dynamo-configs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dynamo-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      protocol: TCP
+      targetPort: 8000
+  selector:
+    rolebasedgroup.workloads.x-k8s.io/name: dynamo-pd
+    rolebasedgroup.workloads.x-k8s.io/role: processor
