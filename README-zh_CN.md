@@ -9,7 +9,7 @@ decode和scheduler等角色），支持大语言模型（LLM）跨多节点设�
 ## 最新消息 🔥
 
 [2025-07-21] 发布RBG v0.3.0版本,
-发布内容请参考[release notes](https://github.com/AliyunContainerService/rolebasedgroup/releases)。
+发布内容请参考[release notes](https://github.com/sgl-project/rbg/releases)。
 
 ## 概述
 
