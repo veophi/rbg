@@ -3,18 +3,23 @@
 ## Prerequisites
 
 - A Kubernetes cluster with version >= 1.26 is Required, or it will behave unexpected.
-- Install Prometheus
-- Install Grafana
 - Add the label `alibabacloud.com/inference-workload=xxx` for RBG instances
 
-## Collect inference engine monitoring metrics
+## Usage
+
+1. Collect inference engine monitoring metrics
 
 ```bash
 kubectl apply -f examples/monitoring/podmonitor.yaml
 ```
 
-## Grafana
+2. Access the monitoring interfaces   
+   Install Prometheus and Grafana
+   by [doc](https://github.com/sgl-project/sglang/blob/main/examples/monitoring/README.md).
 
-Import the inference Grafana dashboard
-by [vLLM Grafana JSON](https://docs.vllm.ai/en/latest/getting_started/examples/prometheus_grafana.html#example-materials)
-![](../img/vLLM-Dashboards-Grafana.png)
+- Grafana: http://localhost:3000
+- Prometheus: http://localhost:9090
+
+If you have an existing Prometheus instance, import the corresponding Grafana dashboard using the
+provided [SGLang Grafana JSON].(https://github.com/sgl-project/sglang/blob/main/examples/monitoring/grafana/dashboards/json/sglang-dashboard.json)
+
