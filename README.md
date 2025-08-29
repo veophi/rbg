@@ -9,7 +9,7 @@ prefill and decode architecture.
 ## Latest News 🔥
 
 **[2025-07-21]** RBG v0.3.0 is released. Please check out
-the [release notes](https://github.com/AliyunContainerService/rolebasedgroup/releases) for more details.
+the [release notes](https://github.com/sgl-project/rbg/releases) for more details.
 
 ## Overview
 
