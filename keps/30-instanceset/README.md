@@ -108,7 +108,7 @@ Consider including folks who also work outside the SIG or subproject.
 
 The overall desgin of `InstanceSet`. 
 
-![instanceset architecture](./instanceset-arch.jpeg)
+![instanceset architecture](../../doc/img/instanceset.jpg)
 
 <!--
 This section should contain enough information that the specifics of your
@@ -434,6 +434,7 @@ to implement this enhancement.
 
 #### Implementation
 
+### Test Plan
 
 #### Unit Tests
 
